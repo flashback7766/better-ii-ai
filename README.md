@@ -33,8 +33,8 @@ A drop-in multi-provider AI chat sidebar extension for the [dots-ii](https://git
 ## Installation
 
 ```bash
-git clone <this-repo> qsiiai
-cd qsiiai
+git clone https://github.com/flashback7766/better-ii-ai.git
+cd better-ii-ai
 bash install.sh
 ```
 
