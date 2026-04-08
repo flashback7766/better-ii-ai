@@ -45,7 +45,7 @@ The script will:
 
 Restart Quickshell to apply:
 ```bash
-pkill quickshell && quickshell &
+pkill quickshell && quickshell & # By default, it should do an auto-reload.
 ```
 
 To rollback:
