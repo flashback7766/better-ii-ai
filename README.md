@@ -1,4 +1,4 @@
-# qsiiai — AI Sidebar for dots-ii
+# Better-ii-ai — AI Sidebar for dots-ii
 
 A drop-in multi-provider AI chat sidebar extension for the [dots-ii](https://github.com/end-4/dots-ii) Quickshell config. Supports streaming, extended thinking, function calling (web search, shell commands, config editing), file attachments, chat history, and more.
 
