@@ -1,0 +1,255 @@
+import QtQuick
+
+ApiStrategy {
+    id: root
+
+    property int inputTokens: 0
+    property string _toolCallName: ""
+    property string _toolCallArgs: ""
+    property string _toolCallId: ""
+    property bool _isToolCall: false
+
+    function reset() {
+        inputTokens = 0;
+        _toolCallName = "";
+        _toolCallArgs = "";
+        _toolCallId = "";
+        _isToolCall = false;
+    }
+
+    function buildEndpoint(model) {
+        return model.endpoint;
+    }
+
+    function buildAuthorizationHeader(apiKeyEnvVarName) {
+        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01'`
+    }
+
+    function buildRequestData(model, messages, systemPrompt, temperature, tools, pendingFilePath, thinkingEnabled, thinkingLevel) {
+        const anthropicMessages = [];
+
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            if (msg.role !== "user" && msg.role !== "assistant") continue;
+
+            let contentArray = [];
+
+            // 1. Assistant invokes a tool
+            if (msg.role === "assistant" && msg.functionCall && msg.functionName && msg.functionName.length > 0) {
+                const textOnly = msg.rawContent ? msg.rawContent.split("\n\n[[ Function:")[0] : "";
+                if (textOnly.trim().length > 0) {
+                    contentArray.push({ "type": "text", "text": textOnly });
+                }
+                contentArray.push({
+                    "type": "tool_use",
+                    "id": msg.functionCall.id || ("toolu_" + Math.random().toString(36).substring(2)),
+                    "name": msg.functionName,
+                    "input": msg.functionCall.args || {}
+                });
+                anthropicMessages.push({ "role": "assistant", "content": contentArray });
+                continue;
+            }
+
+            // 2. Tool result message (only when a function name is actually present)
+            if (msg.role === "user" && msg.functionName && msg.functionName.length > 0) {
+                let validToolUseId = null;
+                if (i > 0 && messages[i-1].functionCall && messages[i-1].functionCall.id) {
+                    validToolUseId = messages[i-1].functionCall.id;
+                }
+
+                if (validToolUseId) {
+                    contentArray.push({
+                        "type": "tool_result",
+                        "tool_use_id": validToolUseId,
+                        "content": msg.functionResponse || "" 
+                    });
+                } else {
+                    contentArray.push({
+                        "type": "text",
+                        "text": `[[ Output of ${msg.functionName} ]]:\n${msg.functionResponse || ""}`
+                    });
+                }
+                anthropicMessages.push({ "role": "user", "content": contentArray });
+                continue;
+            }
+
+            // 3. Regular messages
+            const textContent = msg.rawContent || msg.content || "";
+            
+            if (msg.role === "user" && msg.fileBase64 && msg.fileBase64.length > 0) {
+                const mediaType = msg.fileMimeType || "image/png";
+                contentArray.push({
+                    "type": "image",
+                    "source": { "type": "base64", "media_type": mediaType, "data": msg.fileBase64 }
+                });
+                contentArray.push({ "type": "text", "text": textContent || "Describe this image." });
+            } else if (textContent.length > 0) {
+                contentArray.push({ "type": "text", "text": textContent });
+            }
+
+            // Only add to the array if there is actual text or an image
+            if (contentArray.length > 0) {
+                anthropicMessages.push({ "role": msg.role, "content": contentArray });
+            }
+        }
+
+        const requestData = {
+            "model": model.model,
+            "max_tokens": (thinkingEnabled && thinkingLevel > 0) ? 16000 : 8096,
+            "messages": anthropicMessages,
+            "temperature": (thinkingEnabled && thinkingLevel > 0) ? 1 : temperature,
+            "stream": true
+        };
+
+        if (tools && tools.length > 0) {
+            requestData["tools"] = tools;
+        }
+
+        if (thinkingEnabled && thinkingLevel > 0) {
+            const budgets = [0, 4096, 10000, 32000];
+            requestData["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": budgets[Math.min(thinkingLevel, 3)]
+            };
+        }
+
+        if (systemPrompt && systemPrompt.length > 0) {
+            requestData["system"] = systemPrompt;
+        }
+
+        return requestData;
+    }
+
+    function buildScriptFileSetup(filePath) {
+        const trimmedFilePath = filePath.replace(/^file:\/\//, "");
+        let content = "";
+        content += `ATTACH_PATH='${trimmedFilePath.replace(/'/g, "'\\''") }'\n`;
+        content += `ATTACH_MIME=$(file -b --mime-type "$ATTACH_PATH")\n`;
+        content += `ATTACH_B64=$(base64 -w0 "$ATTACH_PATH")\n`;
+        content += `printf '{"inlineFile": {"data": "%s", "mimeType": "%s"}}\\n,\\n' "$ATTACH_B64" "$ATTACH_MIME"\n`;
+        return content;
+    }
+
+    function finalizeScriptContent(content) {
+        return content;
+    }
+
+    function parseResponseLine(data, message) {
+        const cleanData = data.trim();
+
+        if (cleanData.startsWith("event:") || cleanData.length === 0) return {};
+
+        if (!cleanData.startsWith("data:")) {
+            try {
+                const errJson = JSON.parse(cleanData);
+                if (errJson.inlineFile) {
+                    message.fileBase64 = errJson.inlineFile.data;
+                    message.fileMimeType = errJson.inlineFile.mimeType;
+                    return {};
+                }
+                if (errJson.type === "error" || errJson.error) {
+                    const errType = errJson.error?.type ?? "unknown_error";
+                    const errMsg = errJson.error?.message ?? JSON.stringify(errJson);
+                    message.rawContent += `**API Error** (${errType}): ${errMsg}`;
+                    message.content += `**API Error** (${errType}): ${errMsg}`;
+                    return { finished: true };
+                }
+            } catch(e) {
+                message.rawContent += data + "\n";
+                message.content += data + "\n";
+            }
+            return {};
+        }
+
+        const jsonStr = cleanData.replace(/^data:\s*/, "").trim();
+        if (jsonStr === "[DONE]" || jsonStr.length === 0) return {};
+
+        let json;
+        try {
+            json = JSON.parse(jsonStr);
+        } catch(e) { return {}; }
+
+        if (json.type === "message_start" && json.message?.usage) {
+            root.inputTokens = json.message.usage.input_tokens ?? 0;
+        }
+
+        if (json.type === "content_block_start" && json.content_block?.type === "tool_use") {
+            root._isToolCall = true;
+            root._toolCallName = json.content_block.name;
+            root._toolCallId = json.content_block.id;
+            root._toolCallArgs = "";
+            return {};
+        }
+
+        if (json.type === "content_block_delta" && json.delta?.type === "input_json_delta") {
+            root._toolCallArgs += json.delta.partial_json;
+            return {};
+        }
+
+        if (json.type === "content_block_stop" && root._isToolCall) {
+            root._isToolCall = false;
+            let args = {};
+            try { args = JSON.parse(root._toolCallArgs); } catch(e) {}
+            
+            const fc = { name: root._toolCallName, args: args, id: root._toolCallId };
+            
+            message.functionName = root._toolCallName;
+            message.functionCall = fc;
+            const rawEntry = `\n\n[[ Function: ${root._toolCallName}(${root._toolCallArgs}) ]]\n`;
+            message.rawContent += rawEntry;
+            
+            root._toolCallName = "";
+            root._toolCallArgs = "";
+            root._toolCallId = "";
+            
+            return { functionCall: fc, finished: false };
+        }
+
+        if (json.type === "content_block_delta" && json.delta?.type === "text_delta") {
+            message.rawContent += json.delta.text ?? "";
+            return {};
+        }
+
+        if (json.type === "content_block_delta" && json.delta?.type === "thinking_delta") {
+            const thought = json.delta.thinking ?? "";
+            if (thought.length > 0) {
+                if (!message._thinkOpen) {
+                    message.rawContent += "<think>";
+                    message._thinkOpen = true;
+                }
+                message.rawContent += thought;
+            }
+            return {};
+        }
+
+        if (json.type === "content_block_start" && json.content_block?.type === "text") {
+            if (message._thinkOpen) {
+                message.rawContent += "</think>\n";
+                message._thinkOpen = false;
+            }
+            return {};
+        }
+
+        if (json.type === "message_delta") {
+            const outputTokens = json.usage?.output_tokens ?? 0;
+            return {
+                finished: true,
+                tokenUsage: {
+                    input: root.inputTokens,
+                    output: outputTokens,
+                    total: root.inputTokens + outputTokens
+                }
+            };
+        }
+
+        if (json.type === "message_stop") {
+            return { finished: true };
+        }
+
+        return {};
+    }
+
+    function onRequestFinished(message) {
+        return { finished: false };
+    }
+}
