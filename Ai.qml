@@ -23,7 +23,7 @@ Singleton {
     property Component aiModelComponent: AiModel {}
     property Component geminiApiStrategy: GeminiApiStrategy {}
     property Component openaiApiStrategy: OpenAiApiStrategy {}
-    property Component mistralApiStrategy: MistralApiStrategy {}
+
     property Component anthropicApiStrategy: AnthropicApiStrategy {}
     GeminiApiStrategy { id: geminiStrategy }
     readonly property string interfaceRole: "interface"
@@ -91,8 +91,7 @@ Singleton {
     function currentModelThinkingStyle() {
         return root.modelThinkingStyles[currentModelId] ?? ""
     }
-    // Updated imperatively in setModel() for reliable QML reactivity
-    property string currentThinkingStyle: ""
+    property string currentThinkingStyle: root.modelThinkingStyles[currentModelId] ?? ""
 
     property QtObject tokenCount: QtObject {
         property int input: -1
@@ -112,16 +111,10 @@ Singleton {
         "gemini-3.1-pro": [2.00, 12.00],
         "claude-haiku-4-5": [0.80, 4.00],
         "claude-sonnet-4-6": [3.00, 15.00],
-        "claude-opus-4-6": [15.00, 75.00],
+        "claude-opus-4-7": [15.00, 75.00],
         "gpt-5.4-nano": [0.20, 1.25],
         "gpt-5.4-mini": [0.75, 4.50],
         "gpt-5.4": [2.50, 15.00],
-        "groq-llama-3.3-70b": [0, 0],
-        "groq-qwen3-32b": [0, 0],
-        "grok-3": [3.00, 15.00],
-        "grok-4-1-fast": [0.20, 0.50],
-        "deepseek-chat": [0.28, 0.42],
-        "deepseek-reasoner": [0.55, 2.19],
     })
 
     // Thinking style per model — "gemini" uses thinking_level, "anthropic" uses budget_tokens
@@ -130,7 +123,7 @@ Singleton {
         "gemini-3-flash": "gemini",
         "gemini-3.1-pro": "gemini",
         "claude-sonnet-4-6": "anthropic",
-        "claude-opus-4-6": "anthropic",
+        "claude-opus-4-7": "anthropic",
     })
 
     function calculateCost(modelId, inputTokens, outputTokens) {
@@ -262,59 +255,25 @@ Singleton {
                     },
                 },
             ],
-            "search": [],
-            "none": [],
-        },
-        "mistral": {
-            "functions": [
+            "search": [
                 {
                     "type": "function",
                     "function": {
-                        "name": "get_shell_config",
-                        "description": "Get the desktop shell config file contents",
-                        "parameters": {}
-                    },
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "set_shell_config",
-                        "description": "Set a field in the desktop graphical shell config file. Must only be used after `get_shell_config`.",
+                        "name": "web_search_preview",
+                        "description": "Search the web for current information. Use for factual queries, recent events, prices, docs, etc.",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "key": {
+                                "query": {
                                     "type": "string",
-                                    "description": "The key to set, e.g. `bar.borderless`. MUST NOT BE GUESSED, use `get_shell_config` to see what keys are available before setting.",
-                                },
-                                "value": {
-                                    "type": "string",
-                                    "description": "The value to set, e.g. `true`"
+                                    "description": "The search query"
                                 }
                             },
-                            "required": ["key", "value"]
+                            "required": ["query"]
                         }
                     }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "run_shell_command",
-                        "description": "Run a shell command in bash and get its output. Use this only for quick commands that don't require user interaction. For commands that require interaction, ask the user to run manually instead.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "command": {
-                                    "type": "string",
-                                    "description": "The bash command to run",
-                                },
-                            },
-                            "required": ["command"]
-                        }
-                    },
-                },
+                }
             ],
-            "search": [],
             "none": [],
         },
         "anthropic": {
@@ -385,7 +344,7 @@ Singleton {
     // - extraParams: Extra parameters to be passed to the model. This is a JSON object.
     property var models: Config.options.policies.ai === 2 ? {} : {
         "gemini-3.1-flash-lite": aiModelComponent.createObject(this, {
-            "name": "Gemini 3.1 Flash-Lite",
+            "name": "Gemini Flash-Lite",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nFastest & cheapest. Best for high-volume tasks, translation, and simple queries."),
             "homepage": "https://aistudio.google.com",
@@ -399,7 +358,7 @@ Singleton {
             "thinking_style": "gemini",
         }),
         "gemini-3-flash": aiModelComponent.createObject(this, {
-            "name": "Gemini 3 Flash",
+            "name": "Gemini Flash",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nPro-level intelligence at Flash speed. Great for agentic workflows and coding."),
             "homepage": "https://aistudio.google.com",
@@ -413,7 +372,7 @@ Singleton {
             "thinking_style": "gemini",
         }),
         "gemini-3.1-pro": aiModelComponent.createObject(this, {
-            "name": "Gemini 3.1 Pro",
+            "name": "Gemini Pro",
             "icon": "google-gemini-symbolic",
             "description": Translation.tr("Online | Google's model\nMost advanced reasoning. Excels at complex problems, coding, and research. 1M context."),
             "homepage": "https://aistudio.google.com",
@@ -427,7 +386,7 @@ Singleton {
             "thinking_style": "gemini",
         }),
         "claude-haiku-4-5": aiModelComponent.createObject(this, {
-            "name": "Claude Haiku 4.5",
+            "name": "Claude Haiku",
             "icon": "anthropic-symbolic",
             "description": Translation.tr("Online | Anthropic's model\nFastest Claude model. Great for quick tasks and high-volume use."),
             "homepage": "https://anthropic.com",
@@ -440,7 +399,7 @@ Singleton {
             "api_format": "anthropic",
         }),
         "claude-sonnet-4-6": aiModelComponent.createObject(this, {
-            "name": "Claude Sonnet 4.6",
+            "name": "Claude Sonnet",
             "icon": "anthropic-symbolic",
             "description": Translation.tr("Online | Anthropic's model\nSmart, efficient. Great at coding, analysis and writing."),
             "homepage": "https://anthropic.com",
@@ -453,13 +412,13 @@ Singleton {
             "api_format": "anthropic",
             "thinking_style": "anthropic",
         }),
-        "claude-opus-4-6": aiModelComponent.createObject(this, {
-            "name": "Claude Opus 4.6",
+        "claude-opus-4-7": aiModelComponent.createObject(this, {
+            "name": "Claude Opus",
             "icon": "anthropic-symbolic",
             "description": Translation.tr("Online | Anthropic's model\nMost intelligent Claude. Best for complex reasoning and creative tasks."),
             "homepage": "https://anthropic.com",
             "endpoint": "https://api.anthropic.com/v1/messages",
-            "model": "claude-opus-4-6",
+            "model": "claude-opus-4-7",
             "requires_key": true,
             "key_id": "anthropic",
             "key_get_link": "https://console.anthropic.com/settings/keys",
@@ -468,7 +427,7 @@ Singleton {
             "thinking_style": "anthropic",
         }),
         "gpt-5.4-nano": aiModelComponent.createObject(this, {
-            "name": "GPT-5.4 Nano",
+            "name": "GPT Nano",
             "icon": "openai-symbolic",
             "description": Translation.tr("Online | OpenAI's model\nFastest & cheapest GPT. Best for simple tasks, classification, and data extraction."),
             "homepage": "https://platform.openai.com",
@@ -481,7 +440,7 @@ Singleton {
             "api_format": "openai",
         }),
         "gpt-5.4-mini": aiModelComponent.createObject(this, {
-            "name": "GPT-5.4 Mini",
+            "name": "GPT Mini",
             "icon": "openai-symbolic",
             "description": Translation.tr("Online | OpenAI's model\nFast & capable. Great balance of speed, quality, and cost."),
             "homepage": "https://platform.openai.com",
@@ -494,7 +453,7 @@ Singleton {
             "api_format": "openai",
         }),
         "gpt-5.4": aiModelComponent.createObject(this, {
-            "name": "GPT-5.4",
+            "name": "GPT Standard",
             "icon": "openai-symbolic",
             "description": Translation.tr("Online | OpenAI's model\nFlagship. Best for complex reasoning, coding, and professional work."),
             "homepage": "https://platform.openai.com",
@@ -506,95 +465,14 @@ Singleton {
             "key_get_description": Translation.tr("**Pricing**: paid\n\n**Instructions**: platform.openai.com → API Keys → Create new secret key"),
             "api_format": "openai",
         }),
-        "groq-llama-3.3-70b": aiModelComponent.createObject(this, {
-            "name": "Llama 3.3 70B (Groq)",
-            "icon": "ollama-symbolic",
-            "description": Translation.tr("Online | Groq (free)\n300+ tok/s. Fastest inference. Free tier: 30 RPM, 14400 RPD."),
-            "homepage": "https://console.groq.com",
-            "endpoint": "https://api.groq.com/openai/v1/chat/completions",
-            "model": "llama-3.3-70b-versatile",
-            "requires_key": true,
-            "key_id": "groq",
-            "key_get_link": "https://console.groq.com/keys",
-            "key_get_description": Translation.tr("**Pricing**: free tier (no card)\n\n**Instructions**: console.groq.com → API Keys → Create"),
-            "api_format": "openai",
-        }),
-        "groq-qwen3-32b": aiModelComponent.createObject(this, {
-            "name": "Qwen3 32B (Groq)",
-            "icon": "ollama-symbolic",
-            "description": Translation.tr("Online | Groq (free)\nAlibaba's reasoning model. Fast inference on Groq hardware."),
-            "homepage": "https://console.groq.com",
-            "endpoint": "https://api.groq.com/openai/v1/chat/completions",
-            "model": "qwen/qwen3-32b",
-            "requires_key": true,
-            "key_id": "groq",
-            "key_get_link": "https://console.groq.com/keys",
-            "key_get_description": Translation.tr("**Pricing**: free tier (no card)\n\n**Instructions**: console.groq.com → API Keys → Create"),
-            "api_format": "openai",
-        }),
-        "grok-3": aiModelComponent.createObject(this, {
-            "name": "Grok 3",
-            "icon": "openai-symbolic",
-            "description": Translation.tr("Online | xAI's model\nAdvanced reasoning. 131K context. $25 free credits on signup."),
-            "homepage": "https://console.x.ai",
-            "endpoint": "https://api.x.ai/v1/chat/completions",
-            "model": "grok-3",
-            "requires_key": true,
-            "key_id": "xai",
-            "key_get_link": "https://console.x.ai/team/default/api-keys",
-            "key_get_description": Translation.tr("**Pricing**: $3/M in, $15/M out. $25 free credits\n\n**Instructions**: console.x.ai → API Keys → Create"),
-            "api_format": "openai",
-        }),
-        "grok-4-1-fast": aiModelComponent.createObject(this, {
-            "name": "Grok 4.1 Fast",
-            "icon": "openai-symbolic",
-            "description": Translation.tr("Online | xAI's model\nFast reasoning + tool use. 2M context. Very cheap."),
-            "homepage": "https://console.x.ai",
-            "endpoint": "https://api.x.ai/v1/chat/completions",
-            "model": "grok-4-1-fast-reasoning",
-            "requires_key": true,
-            "key_id": "xai",
-            "key_get_link": "https://console.x.ai/team/default/api-keys",
-            "key_get_description": Translation.tr("**Pricing**: $0.20/M in, $0.50/M out. $25 free credits\n\n**Instructions**: console.x.ai → API Keys → Create"),
-            "api_format": "openai",
-        }),
-        "deepseek-chat": aiModelComponent.createObject(this, {
-            "name": "DeepSeek V3",
-            "icon": "deepseek-symbolic",
-            "description": Translation.tr("Online | DeepSeek's model\nVery capable and extremely cheap. Great for coding."),
-            "homepage": "https://platform.deepseek.com",
-            "endpoint": "https://api.deepseek.com/chat/completions",
-            "model": "deepseek-chat",
-            "requires_key": true,
-            "key_id": "deepseek",
-            "key_get_link": "https://platform.deepseek.com/api_keys",
-            "key_get_description": Translation.tr("**Pricing**: ~$0.28/M in, ~$0.42/M out\n\n**Instructions**: platform.deepseek.com → API Keys → Create"),
-            "api_format": "openai",
-        }),
-        "deepseek-reasoner": aiModelComponent.createObject(this, {
-            "name": "DeepSeek R1",
-            "icon": "deepseek-symbolic",
-            "description": Translation.tr("Online | DeepSeek's model\nReasoning model with chain-of-thought. Best for math and logic."),
-            "homepage": "https://platform.deepseek.com",
-            "endpoint": "https://api.deepseek.com/chat/completions",
-            "model": "deepseek-reasoner",
-            "requires_key": true,
-            "key_id": "deepseek",
-            "key_get_link": "https://platform.deepseek.com/api_keys",
-            "key_get_description": Translation.tr("**Pricing**: ~$0.55/M in, ~$2.19/M out\n\n**Instructions**: platform.deepseek.com → API Keys → Create"),
-            "api_format": "openai",
-        }),
     }
     property var modelList: Object.keys(root.models)
     property var currentModelId: Persistent.states?.ai?.model || modelList[0]
     // Track built-in model IDs so we know which ones are removable
     readonly property var builtinModelIds: [
         "gemini-3.1-flash-lite", "gemini-3-flash", "gemini-3.1-pro",
-        "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-6",
-        "gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.4",
-        "groq-llama-3.3-70b", "groq-qwen3-32b",
-        "grok-3", "grok-4-1-fast",
-        "deepseek-chat", "deepseek-reasoner"
+        "claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7",
+        "gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.4"
     ]
 
     function isRemovableModel(modelId) {
@@ -616,7 +494,6 @@ Singleton {
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(this),
         "gemini": geminiApiStrategy.createObject(this),
-        "mistral": mistralApiStrategy.createObject(this),
         "anthropic": anthropicApiStrategy.createObject(this),
     }
     property ApiStrategy currentApiStrategy: apiStrategies[models[currentModelId]?.api_format || "openai"]
@@ -824,6 +701,13 @@ Singleton {
         if (msg && msg.destroy) msg.destroy();
     }
 
+    function removeMessageById(id) {
+        const index = root.messageIDs.indexOf(id);
+        if (index !== -1) {
+            root.removeMessage(index);
+        }
+    }
+
     function addApiKeyAdvice(model) {
         root.addMessage(
             Translation.tr('To set an API key, pass it with the %4 command\n\nTo view the key, pass "get" with the command<br/>\n\n### For %1:\n\n**Link**: %2\n\n%3')
@@ -840,6 +724,10 @@ Singleton {
         if (!modelId) modelId = ""
         modelId = modelId.toLowerCase()
         if (modelList.indexOf(modelId) !== -1) {
+            root.currentModelId = modelId
+            if (setPersistentState) root.savePersistentState("model", modelId)
+            
+            if (feedback) root.addMessage(Translation.tr("Switched to **%1**").arg(models[modelId].name), Ai.interfaceRole);
             const model = models[modelId]
             // See if policy prevents online models
             if (Config.options.policies.ai === 2 && !model.endpoint.includes("localhost")) {
@@ -850,7 +738,6 @@ Singleton {
                 return;
             }
             if (setPersistentState) Persistent.states.ai.model = modelId;
-            root.currentThinkingStyle = root.modelThinkingStyles[modelId] ?? "";
             if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(model.name), root.interfaceRole);
             if (model.requires_key) {
                 // If key not there show advice
@@ -859,7 +746,7 @@ Singleton {
                 }
             }
         } else {
-            if (feedback) root.addMessage(Translation.tr("Invalid model. Supported: \n```\n") + modelList.join("\n```\n```\n"), Ai.interfaceRole) + "\n```"
+            if (feedback) root.addMessage(Translation.tr("Invalid model. Supported: \n```\n") + modelList.join("\n```\n```\n") + "\n```", Ai.interfaceRole)
         }
     }
 
@@ -881,7 +768,7 @@ Singleton {
             root.addMessage(Translation.tr("Temperature must be between 0 and 2"), Ai.interfaceRole);
             return;
         }
-        Persistent.states.ai.temperature = value;
+        root.savePersistentState("temperature", value)
         root.temperature = value;
         root.addMessage(Translation.tr("Temperature set to %1").arg(value), Ai.interfaceRole);
     }
@@ -955,7 +842,7 @@ Singleton {
                 const slotName = `history_${root.chatHistoryIndex % root.chatHistorySlots}`;
                 root.saveChat(slotName);
                 root.chatHistoryIndex = (root.chatHistoryIndex + 1) % root.chatHistorySlots;
-                Persistent.states.ai.historyIndex = root.chatHistoryIndex;
+                root.savePersistentState("historyIndex", root.chatHistoryIndex)
             } catch (e) {
                 console.log("[AI] newChat: could not save to history:", e);
             }
@@ -1100,21 +987,95 @@ Singleton {
             let summaries = [];
             for (let i = 0; i < root.chatHistorySlots; i++) {
                 try {
-                    chatSummaryLoader.path = `${Directories.aiChats}/history_${i}.json`;
+                    chatSummaryLoader.path = `${Directories.aiChats}/history_${i}.summary.txt`;
                     chatSummaryLoader.reload();
-                    const content = chatSummaryLoader.text();
-                    if (!content || content.length < 10) continue;
-                    const summary = root.summarizeSavedChat(content);
-                    if (summary.length > 0) summaries.push(summary);
+                    let content = chatSummaryLoader.text();
+                    
+                    if (content && content.length > 5) {
+                        summaries.push(`- ${content.trim()}`);
+                    } else {
+                        // Fallback to naive JSON parsing
+                        chatSummaryLoader.path = `${Directories.aiChats}/history_${i}.json`;
+                        chatSummaryLoader.reload();
+                        content = chatSummaryLoader.text();
+                        if (!content || content.length < 10) continue;
+                        const summary = root.summarizeSavedChat(content);
+                        if (summary.length > 0) summaries.push(summary);
+                    }
                 } catch (e) {
                     continue;
                 }
             }
             if (summaries.length > 0) {
-                root.previousChatSummary = summaries.join("\n").substring(0, 1200);
+                root.previousChatSummary = summaries.join("\n").substring(0, 1500);
+            } else {
+                root.previousChatSummary = "";
             }
         } catch (e) {
             console.log("[AI] Could not load recent chat summaries:", e);
+        }
+    }
+
+    Process {
+        id: backgroundMemoryProc
+        property string chatName: ""
+        property string buffer: ""
+        stdout: SplitParser {
+            onRead: data => { backgroundMemoryProc.buffer += data; }
+        }
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0) {
+                try {
+                    const response = JSON.parse(backgroundMemoryProc.buffer);
+                    const newSummary = response.candidates[0]?.content?.parts[0]?.text;
+                    if (newSummary && newSummary.length > 0) {
+                        const fileContent = newSummary.trim().replace(/'/g, "'\\''");
+                        saveSummaryProc.command = ["bash", "-c", `echo '${fileContent}' > ${Directories.aiChats}/${backgroundMemoryProc.chatName}.summary.txt`];
+                        saveSummaryProc.running = true;
+                    }
+                } catch (e) { console.log("[AI] Memory Summarizer parse error:", e); }
+            }
+            backgroundMemoryProc.buffer = "";
+            backgroundMemoryProc.chatName = "";
+        }
+    }
+
+    Process { id: saveSummaryProc }
+
+    function generateMemorySummary(chatName, transcript) {
+        if (backgroundMemoryProc.running) return;
+        const model = models[root.summarizerModelId];
+        if (!model) return;
+        const prompt = "You are a memory module. Summarize the following chat into a very brief, concise bullet point detailing the context, key decisions, and user's intent. Output ONLY the short summary in the same language as the chat, so it can be injected into the next chat session's memory.";
+        const requestData = geminiStrategy.buildRequestData(model, [{ role: "user", rawContent: transcript }], prompt, 0.3, [], "", false, 0);
+        
+        const endpoint = geminiStrategy.buildEndpoint(model).replace(":streamGenerateContent", ":generateContent");
+        const apiKey = root.apiKeys ? (root.apiKeys[model.key_id] ?? "") : "";
+        if (!apiKey) return;
+        
+        const curlCmd = `curl -s "${endpoint}" -H "Content-Type: application/json" --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(requestData))}'`;
+        const bashCommand = `bash <<'EOP_MEMORY'\nexport ${root.apiKeyEnvVarName}='${apiKey}'\n${curlCmd}\nEOP_MEMORY\n`;
+        
+        backgroundMemoryProc.chatName = chatName;
+        backgroundMemoryProc.command = ["bash", "-c", bashCommand];
+        backgroundMemoryProc.running = true;
+    }
+
+    Timer {
+        id: memorySummaryTimer
+        interval: 10000 // 10s idle
+        onTriggered: {
+            if (root.messageIDs.length < 2) return;
+            let transcript = "";
+            for (let i = 0; i < root.messageIDs.length; i++) {
+                const msg = root.messageByID[root.messageIDs[i]];
+                if (!msg || msg.role === root.interfaceRole) continue;
+                const role = msg.role === "user" ? "User" : "Assistant";
+                transcript += `${role}: ${msg.rawContent}\n`;
+            }
+            if (transcript.length > 50) {
+                root.generateMemorySummary(`history_${root.chatHistoryIndex % root.chatHistorySlots}`, transcript);
+            }
         }
     }
 
@@ -1154,6 +1115,7 @@ Singleton {
                 root.postResponseHook = null;
             }
             root.saveChat("lastSession")
+            memorySummaryTimer.restart()
             root.responseFinished()
         }
 
@@ -1396,9 +1358,9 @@ Singleton {
         root.pendingFilePath = CF.FileUtils.trimFileProtocol(filePath);
     }
 
-    function regenerate(messageIndex) {
-        if (messageIndex < 0 || messageIndex >= messageIDs.length) return;
-        const id = root.messageIDs[messageIndex];
+    function regenerateById(id) {
+        const messageIndex = root.messageIDs.indexOf(id);
+        if (messageIndex === -1) return;
         const message = root.messageByID[id];
         if (message.role !== "assistant") return;
         // Remove all messages after this one
@@ -1516,6 +1478,28 @@ Singleton {
         }
     }
 
+    // Web search process for OpenAI web_search_preview tool
+    Process {
+        id: webSearchProc
+        property string query: ""
+        property AiMessageData message
+        property string functionName: "web_search_preview"
+        property string collectedOutput: ""
+
+        stdout: SplitParser {
+            onRead: (output) => { webSearchProc.collectedOutput += output; }
+        }
+        onExited: (exitCode, exitStatus) => {
+            const results = webSearchProc.collectedOutput.trim();
+            const response = results.length > 0
+                ? Translation.tr("Search results for \"%1\":\n\n%2").arg(webSearchProc.query).arg(results)
+                : Translation.tr("No results found for \"%1\".").arg(webSearchProc.query);
+            root.addFunctionOutputMessage(webSearchProc.functionName, response);
+            webSearchProc.collectedOutput = "";
+            requester.makeRequest();
+        }
+    }
+
     function handleFunctionCall(name, args: var, message: AiMessageData) {
         if (name === "switch_to_search_mode") {
             const modelId = root.currentModelId;
@@ -1523,6 +1507,22 @@ Singleton {
             root.postResponseHook = () => { root.currentTool = "functions" }
             addFunctionOutputMessage(name, Translation.tr("Switched to search mode. Continue with the user's request."))
             requester.makeRequest();
+        } else if (name === "web_search_preview") {
+            // OpenAI search tool — run a quick web search and return results
+            const query = args?.query;
+            if (!query || query.length === 0) {
+                addFunctionOutputMessage(name, Translation.tr("No query provided."));
+                requester.makeRequest();
+                return;
+            }
+            // Notify user a search is happening
+            message.content += `\n\n\`\`\`command\n🔍 Searching: ${query}\n\`\`\``;
+            // Use xdg-open or a simple curl-based DDG search summary
+            webSearchProc.query = query;
+            webSearchProc.message = message;
+            webSearchProc.functionName = name;
+            webSearchProc.command = ["bash", "-c", `curl -s -A 'Mozilla/5.0' 'https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}' | grep -oP '(?<=<a class="result__snippet">)[^<]+' | head -5 | tr '\n' ' '`];
+            webSearchProc.running = true;
         } else if (name === "get_shell_config") {
             const configJson = CF.ObjectUtils.toPlainObject(Config.options)
             addFunctionOutputMessage(name, JSON.stringify(configJson));
@@ -1530,11 +1530,14 @@ Singleton {
         } else if (name === "set_shell_config") {
             if (!args.key || !args.value) {
                 addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `key` and `value`."));
+                requester.makeRequest();
                 return;
             }
             const key = args.key;
             const value = args.value;
             Config.setNestedValue(key, value);
+            addFunctionOutputMessage(name, Translation.tr("Config updated: %1 = %2").arg(key).arg(value));
+            requester.makeRequest();
         } else if (name === "run_shell_command") {
             if (!args.command || args.command.length === 0) {
                 addFunctionOutputMessage(name, Translation.tr("Invalid arguments. Must provide `command`."));
@@ -1557,8 +1560,9 @@ Singleton {
                     console.log("[AI] Dangerous command detected, requiring manual approval:", args.command);
                 }
             }
+        } else {
+            root.addMessage(Translation.tr("Unknown function call: %1").arg(name), root.interfaceRole);
         }
-        else root.addMessage(Translation.tr("Unknown function call: %1").arg(name), "assistant");
     }
 
     function chatToJson() {
@@ -1571,6 +1575,7 @@ Singleton {
                     "rawContent": message.rawContent,
                     "fileMimeType": message.fileMimeType,
                     "fileUri": message.fileUri,
+                    "fileTextContent": message.fileTextContent,
                     "localFilePath": message.localFilePath,
                     "model": message.model,
                     "thinking": false,
@@ -1630,6 +1635,7 @@ Singleton {
                     "content": message.rawContent,
                     "fileMimeType": message.fileMimeType,
                     "fileUri": message.fileUri,
+                    "fileTextContent": message.fileTextContent ?? "",
                     "localFilePath": message.localFilePath,
                     "model": message.model,
                     "thinking": message.thinking,
@@ -1650,5 +1656,12 @@ Singleton {
         } finally {
             getSavedChats.running = true;
         }
+    }
+
+    function savePersistentState(key, value) {
+        if (!Persistent.states) return;
+        let ai = Persistent.states.ai || {};
+        ai[key] = value;
+        Persistent.states = Object.assign({}, Persistent.states, { ai: ai });
     }
 }

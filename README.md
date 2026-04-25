@@ -1,6 +1,6 @@
-# Better-ii-ai — AI Sidebar for dots-ii
+# Better-ii-ai — AI Sidebar for dots-hyprland
 
-A drop-in multi-provider AI chat sidebar extension for the [dots-ii](https://github.com/end-4/dots-ii) Quickshell config. Supports streaming, extended thinking, function calling (web search, shell commands, config editing), file attachments, chat history, and more.
+A drop-in multi-provider AI chat sidebar extension for the [dots-hyprland](https://github.com/end-4/dots-hyprland) Quickshell config. Supports streaming, extended thinking, function calling (web search, shell commands, config editing), file attachments, chat history, and more.
 
 ---
 
@@ -8,7 +8,7 @@ A drop-in multi-provider AI chat sidebar extension for the [dots-ii](https://git
 
 | Feature | Details |
 |---|---|
-| **Providers** | Gemini, OpenAI, Anthropic, Groq, xAI, DeepSeek, Mistral, Ollama (auto-detect), any OpenAI-compatible endpoint |
+| **Providers** | Gemini, OpenAI, Anthropic, Ollama (auto-detect), any OpenAI-compatible endpoint |
 | **Streaming** | Adaptive flush throttle — smooth even for very large responses |
 | **Extended thinking** | Anthropic `budget_tokens` (toggle on/off) · Gemini `thinking_level` (Off / Low / Med / High) |
 | **Function calling** | Web search · run shell commands · read/edit shell config |
@@ -104,16 +104,10 @@ Keys are stored via `KeyringStorage` (not in plain text files).
 | `gemini-3.1-pro` | Gemini 3.1 Pro | Google |
 | `claude-haiku-4-5` | Claude Haiku 4.5 | Anthropic |
 | `claude-sonnet-4-6` | Claude Sonnet 4.6 | Anthropic |
-| `claude-opus-4-6` | Claude Opus 4.6 | Anthropic |
+| `claude-opus-4-7` | Claude Opus 4.7 | Anthropic |
 | `gpt-5.4-nano` | GPT-5.4 Nano | OpenAI |
 | `gpt-5.4-mini` | GPT-5.4 Mini | OpenAI |
 | `gpt-5.4` | GPT-5.4 | OpenAI |
-| `groq-llama-3.3-70b` | Llama 3.3 70B | Groq (free tier) |
-| `groq-qwen3-32b` | Qwen3 32B | Groq (free tier) |
-| `grok-3` | Grok 3 | xAI |
-| `grok-4-1-fast` | Grok 4.1 Fast | xAI |
-| `deepseek-chat` | DeepSeek V3 | DeepSeek |
-| `deepseek-reasoner` | DeepSeek R1 | DeepSeek |
 
 Ollama models are **auto-detected** on startup if Ollama is running.
 

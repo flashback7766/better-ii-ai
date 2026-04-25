@@ -78,11 +78,23 @@ ApiStrategy {
             
             if (msg.role === "user" && msg.fileBase64 && msg.fileBase64.length > 0) {
                 const mediaType = msg.fileMimeType || "image/png";
-                contentArray.push({
-                    "type": "image",
-                    "source": { "type": "base64", "media_type": mediaType, "data": msg.fileBase64 }
-                });
-                contentArray.push({ "type": "text", "text": textContent || "Describe this image." });
+                // Images go as image blocks; other types (text, pdf, code) go as text blocks
+                if (mediaType.startsWith("image/")) {
+                    contentArray.push({
+                        "type": "image",
+                        "source": { "type": "base64", "media_type": mediaType, "data": msg.fileBase64 }
+                    });
+                    contentArray.push({ "type": "text", "text": textContent || "Describe this image." });
+                } else {
+                    // Decode base64 to text and send as a text block
+                    const fileName = msg.localFilePath ? msg.localFilePath.split("/").pop() : "attached file";
+                    contentArray.push({ "type": "text", "text": "[Attached file: " + fileName + " (" + mediaType + ")]" });
+                    contentArray.push({ "type": "text", "text": textContent || "Please analyze this file." });
+                }
+            } else if (msg.fileTextContent && msg.fileTextContent.length > 0) {
+                const fileName = msg.localFilePath ? msg.localFilePath.split("/").pop() : "attached file";
+                contentArray.push({ "type": "text", "text": "[Attached file: " + fileName + "]\n```\n" + msg.fileTextContent + "\n```" });
+                contentArray.push({ "type": "text", "text": textContent || "Please analyze this file." });
             } else if (textContent.length > 0) {
                 contentArray.push({ "type": "text", "text": textContent });
             }
@@ -122,11 +134,20 @@ ApiStrategy {
 
     function buildScriptFileSetup(filePath) {
         const trimmedFilePath = filePath.replace(/^file:\/\//, "");
+        const escapedPath = trimmedFilePath.replace(/'/g, "'\\''" );
         let content = "";
-        content += `ATTACH_PATH='${trimmedFilePath.replace(/'/g, "'\\''") }'\n`;
-        content += `ATTACH_MIME=$(file -b --mime-type "$ATTACH_PATH")\n`;
-        content += `ATTACH_B64=$(base64 -w0 "$ATTACH_PATH")\n`;
-        content += `printf '{"inlineFile": {"data": "%s", "mimeType": "%s"}}\\n,\\n' "$ATTACH_B64" "$ATTACH_MIME"\n`;
+        content += "ATTACH_PATH='" + escapedPath + "'\n";
+        content += "ATTACH_MIME=$(file -b --mime-type \"$ATTACH_PATH\")\n";
+        // Images: base64 → inlineFile JSON (handled as image blocks)
+        // Other: read text → textFile JSON (handled as text blocks)
+        content += "if echo \"$ATTACH_MIME\" | grep -qE '^image/'; then\n";
+        content += "  ATTACH_B64=$(base64 -w0 \"$ATTACH_PATH\")\n";
+        content += "  printf '{\"inlineFile\": {\"data\": \"%s\", \"mimeType\": \"%s\"}}\\n,\\n' \"$ATTACH_B64\" \"$ATTACH_MIME\"\n";
+        content += "else\n";
+        content += "  ATTACH_TEXT=$(head -c 100000 \"$ATTACH_PATH\" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || head -c 50000 \"$ATTACH_PATH\")\n";
+        content += "  ATTACH_NAME=$(basename \"$ATTACH_PATH\")\n";
+        content += "  printf '{\"textFile\": {\"content\": %s, \"mimeType\": \"%s\", \"name\": \"%s\"}}\\n,\\n' \"$ATTACH_TEXT\" \"$ATTACH_MIME\" \"$ATTACH_NAME\"\n";
+        content += "fi\n";
         return content;
     }
 
@@ -147,6 +168,12 @@ ApiStrategy {
                     message.fileMimeType = errJson.inlineFile.mimeType;
                     return {};
                 }
+                if (errJson.textFile) {
+                    message.fileTextContent = errJson.textFile.content;
+                    message.fileMimeType = errJson.textFile.mimeType;
+                    if (errJson.textFile.name) message.localFilePath = errJson.textFile.name;
+                    return {};
+                }
                 if (errJson.type === "error" || errJson.error) {
                     const errType = errJson.error?.type ?? "unknown_error";
                     const errMsg = errJson.error?.message ?? JSON.stringify(errJson);
@@ -155,8 +182,8 @@ ApiStrategy {
                     return { finished: true };
                 }
             } catch(e) {
-                message.rawContent += data + "\n";
-                message.content += data + "\n";
+                // Unrecognised non-data line (e.g. HTTP header, keepalive). Skip silently.
+                console.log("[Anthropic] Skipping unrecognised line:", cleanData.substring(0, 80));
             }
             return {};
         }

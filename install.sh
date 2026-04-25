@@ -34,33 +34,34 @@ cp "$SIDEBAR_AI/MessageCodeBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2
 cp "$SIDEBAR_AI/AiMessage.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
 
 echo "📋 Installing files..."
+echo ""
 
 cp "$SCRIPT_DIR/Ai.qml" "$SERVICES/Ai.qml"
-echo "  ✅ services/Ai.qml"
+echo "  ✅ Ai.qml              → $SERVICES/Ai.qml"
 
 cp "$SCRIPT_DIR/AiMessageData.qml" "$AI_DIR/AiMessageData.qml"
-echo "  ✅ services/ai/AiMessageData.qml"
+echo "  ✅ AiMessageData.qml   → $AI_DIR/AiMessageData.qml"
 
 cp "$SCRIPT_DIR/AnthropicApiStrategy.qml" "$AI_DIR/AnthropicApiStrategy.qml"
-echo "  ✅ services/ai/AnthropicApiStrategy.qml"
+echo "  ✅ AnthropicApiStrategy.qml → $AI_DIR/AnthropicApiStrategy.qml"
 
 cp "$SCRIPT_DIR/GeminiApiStrategy.qml" "$AI_DIR/GeminiApiStrategy.qml"
-echo "  ✅ services/ai/GeminiApiStrategy.qml"
+echo "  ✅ GeminiApiStrategy.qml    → $AI_DIR/GeminiApiStrategy.qml"
 
 cp "$SCRIPT_DIR/OpenAiApiStrategy.qml" "$AI_DIR/OpenAiApiStrategy.qml"
-echo "  ✅ services/ai/OpenAiApiStrategy.qml"
+echo "  ✅ OpenAiApiStrategy.qml    → $AI_DIR/OpenAiApiStrategy.qml"
 
 cp "$SCRIPT_DIR/AiChat.qml" "$SIDEBAR/AiChat.qml"
-echo "  ✅ modules/ii/sidebarLeft/AiChat.qml"
+echo "  ✅ AiChat.qml          → $SIDEBAR/AiChat.qml"
 
 cp "$SCRIPT_DIR/MessageThinkBlock.qml" "$SIDEBAR_AI/MessageThinkBlock.qml"
-echo "  ✅ modules/ii/sidebarLeft/aiChat/MessageThinkBlock.qml"
+echo "  ✅ MessageThinkBlock.qml → $SIDEBAR_AI/MessageThinkBlock.qml"
 
 cp "$SCRIPT_DIR/MessageCodeBlock.qml" "$SIDEBAR_AI/MessageCodeBlock.qml"
-echo "  ✅ modules/ii/sidebarLeft/aiChat/MessageCodeBlock.qml"
+echo "  ✅ MessageCodeBlock.qml  → $SIDEBAR_AI/MessageCodeBlock.qml"
 
 cp "$SCRIPT_DIR/AiMessage.qml" "$SIDEBAR_AI/AiMessage.qml"
-echo "  ✅ modules/ii/sidebarLeft/aiChat/AiMessage.qml"
+echo "  ✅ AiMessage.qml       → $SIDEBAR_AI/AiMessage.qml"
 
 # Install system prompt if present
 if [ -f "$SCRIPT_DIR/ii-Default.md" ]; then
@@ -68,7 +69,15 @@ if [ -f "$SCRIPT_DIR/ii-Default.md" ]; then
     mkdir -p "$PROMPTS_DIR"
     cp "$PROMPTS_DIR/ii-Default.md" "$BACKUP/" 2>/dev/null || true
     cp "$SCRIPT_DIR/ii-Default.md" "$PROMPTS_DIR/ii-Default.md"
-    echo "  ✅ defaults/ai/prompts/ii-Default.md"
+    echo "  ✅ ii-Default.md       → $PROMPTS_DIR/ii-Default.md"
+fi
+
+# Install custom icons
+ICONS_DIR="$QS_BASE/assets/icons"
+mkdir -p "$ICONS_DIR"
+if [ -f "$SCRIPT_DIR/anthropic-symbolic.svg" ]; then
+    cp "$SCRIPT_DIR/anthropic-symbolic.svg" "$ICONS_DIR/"
+    echo "  ✅ anthropic-symbolic.svg → $ICONS_DIR/anthropic-symbolic.svg"
 fi
 
 echo ""
@@ -84,9 +93,8 @@ echo "   Escape          — Close popups / stop generation"
 echo "   Ctrl+1..9       — Quick model switch"
 echo "   Ctrl+Shift+O    — New chat (keybind)"
 echo ""
-echo "📌 Models: Gemini 3.1 Flash-Lite/Flash/Pro, Claude Haiku/Sonnet/Opus,"
-echo "           GPT-5.4 Nano/Mini/Full, Groq Llama/Qwen, Grok 3/4.1,"
-echo "           DeepSeek V3/R1 + Ollama auto-detect + /addlocal"
+echo "📌 Models: Gemini 3.1 Flash-Lite/Flash/Pro, Claude Haiku/Sonnet/Opus 4.7,"
+echo "           GPT-5.4 Nano/Mini/Full + Ollama auto-detect + /addlocal"
 echo ""
 echo "📌 Features:"
 echo "   • Extended thinking (Anthropic) — toggle in Functions popup"

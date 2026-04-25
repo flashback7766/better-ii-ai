@@ -66,7 +66,7 @@ ColumnLayout {
                 Layout.topMargin: 7
                 Layout.bottomMargin: 7
                 Layout.leftMargin: 10
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small + 2
                 font.weight: Font.DemiBold
 
                 text: root.commandSucceeded ? "✅ " + Translation.tr("Command completed")
@@ -78,20 +78,11 @@ ColumnLayout {
                     : root.commandSucceeded || root.commandDone ? Appearance.colors.colOnLayer2
                     : "#cccccc"
 
-                ColorAnimation on color {
+                SequentialAnimation on color {
                     running: root.isCommandRequest && !root.commandDone && !root.commandSucceeded && !root.commandFailed
                     loops: Animation.Infinite
-                    from: "#888888"
-                    to: "#dddddd"
-                    duration: 900
-                    easing.type: Easing.InOutSine
-                    onFinished: {
-                        if (color.toString() === "#dddddd") {
-                            from = "#dddddd"; to = "#888888"
-                        } else {
-                            from = "#888888"; to = "#dddddd"
-                        }
-                    }
+                    ColorAnimation { from: Appearance.colors.colSubtext; to: Appearance.colors.colOnLayer2; duration: 900; easing.type: Easing.InOutSine }
+                    ColorAnimation { from: Appearance.colors.colOnLayer2; to: Appearance.colors.colSubtext; duration: 900; easing.type: Easing.InOutSine }
                 }
             }
 
@@ -103,7 +94,7 @@ ColumnLayout {
                 Layout.topMargin: 7
                 Layout.bottomMargin: 7
                 Layout.leftMargin: 10
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small + 2
                 font.weight: Font.DemiBold
                 color: Appearance.colors.colOnLayer2
                 text: root.displayLang ? Repository.definitionForName(root.displayLang).name : "plain"
@@ -115,7 +106,7 @@ ColumnLayout {
             StyledText {
                 visible: root.isCommandRequest
                 Layout.rightMargin: 8
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small + 2
                 color: Appearance.colors.colSubtext
                 text: root.commandExpanded ? "▲" : "▼"
             }
@@ -171,8 +162,11 @@ ColumnLayout {
         spacing: codeBlockComponentSpacing
         visible: !root.isCommandRequest || root.commandExpanded
 
-        Behavior on visible {
-            PropertyAnimation { duration: 150 }
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Appearance.animation.elementMoveFast.duration
+                easing.type: Easing.InOutQuad
+            }
         }
 
         Rectangle { // Line numbers
@@ -203,7 +197,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignRight
                         font.family: Appearance.font.family.monospace
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small + 2
                         color: Appearance.colors.colSubtext
                         horizontalAlignment: Text.AlignRight
                         text: index + 1
@@ -263,7 +257,7 @@ ColumnLayout {
                         renderType: Text.NativeRendering
                         font.family: Appearance.font.family.monospace
                         font.hintingPreference: Font.PreferNoHinting
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small + 2
                         selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
                         selectionColor: Appearance.colors.colSecondaryContainer
                         color: messageData.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
@@ -303,7 +297,7 @@ ColumnLayout {
                             GroupButton {
                                 contentItem: StyledText {
                                     text: Translation.tr("Reject")
-                                    font.pixelSize: Appearance.font.pixelSize.small
+                                    font.pixelSize: Appearance.font.pixelSize.small + 2
                                     color: Appearance.colors.colOnLayer2
                                 }
                                 onClicked: Ai.rejectCommand(root.messageData)
@@ -312,7 +306,7 @@ ColumnLayout {
                                 toggled: true
                                 contentItem: StyledText {
                                     text: Translation.tr("Approve")
-                                    font.pixelSize: Appearance.font.pixelSize.small
+                                    font.pixelSize: Appearance.font.pixelSize.small + 2
                                     color: Appearance.colors.colOnPrimary
                                 }
                                 onClicked: Ai.approveCommand(root.messageData)

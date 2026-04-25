@@ -10,6 +10,7 @@ QtObject {
     property string fileMimeType
     property string fileUri
     property string fileBase64
+    property string fileTextContent  // Extracted text content from non-image files
     property string localFilePath
     property string model
     property bool thinking: true

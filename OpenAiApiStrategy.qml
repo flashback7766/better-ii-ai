@@ -13,22 +13,46 @@ ApiStrategy {
             "messages": [
                 {role: "system", content: systemPrompt},
                 ...messages.map(message => {
+                    // Image attached via base64
                     if (message.role === "user" && message.fileBase64 && message.fileBase64.length > 0) {
                         const mediaType = message.fileMimeType || "image/png";
+                        if (mediaType.startsWith("image/")) {
+                            return {
+                                "role": message.role,
+                                "content": [
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": "data:" + mediaType + ";base64," + message.fileBase64
+                                        }
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": message.rawContent || "Describe this image."
+                                    }
+                                ]
+                            };
+                        } else {
+                            // Non-image: decode base64 at request-build time isn't trivial,
+                            // so we rely on fileTextContent pre-populated by parseResponseLine
+                            const fileName = message.localFilePath ? message.localFilePath.split("/").pop() : "attached file";
+                            return {
+                                "role": message.role,
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "[File: " + fileName + " (" + mediaType + ")]\n" + (message.fileTextContent || message.rawContent || "")
+                                    }
+                                ]
+                            };
+                        }
+                    }
+                    // Text file attached (non-image, content extracted by shell)
+                    if (message.role === "user" && message.fileTextContent && message.fileTextContent.length > 0) {
+                        const fileName = message.localFilePath ? message.localFilePath.split("/").pop() : "file";
                         return {
                             "role": message.role,
-                            "content": [
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": `data:${mediaType};base64,${message.fileBase64}`
-                                    }
-                                },
-                                {
-                                    "type": "text",
-                                    "text": message.rawContent || "Describe this image."
-                                }
-                            ]
+                            "content": "[Attached file: " + fileName + "]\n```\n" + message.fileTextContent + "\n```\n" + (message.rawContent || "")
                         };
                     }
                     return {
@@ -38,9 +62,12 @@ ApiStrategy {
                 }),
             ],
             "stream": true,
-            "tools": tools,
             "temperature": temperature,
         };
+        // Only include tools when non-empty — many APIs error on empty array
+        if (tools && tools.length > 0) {
+            baseData["tools"] = tools;
+        }
         return model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
     }
 
@@ -50,11 +77,20 @@ ApiStrategy {
 
     function buildScriptFileSetup(filePath) {
         const trimmedFilePath = filePath.replace(/^file:\/\//, "");
+        const escapedPath = trimmedFilePath.replace(/'/g, "'\\''");
         let content = "";
-        content += `ATTACH_PATH='${trimmedFilePath.replace(/'/g, "'\\''") }'\n`;
-        content += `ATTACH_MIME=$(file -b --mime-type "$ATTACH_PATH")\n`;
-        content += `ATTACH_B64=$(base64 -w0 "$ATTACH_PATH")\n`;
-        content += `printf '{"inlineFile": {"data": "%s", "mimeType": "%s"}}\\n' "$ATTACH_B64" "$ATTACH_MIME"\n`;
+        content += "ATTACH_PATH='" + escapedPath + "'\n";
+        content += "ATTACH_MIME=$(file -b --mime-type \"$ATTACH_PATH\")\n";
+        // Images: base64-encode and output as inlineFile JSON
+        // Other files: read text content and output as textFile JSON
+        content += "if echo \"$ATTACH_MIME\" | grep -qE '^image/'; then\n";
+        content += "  ATTACH_B64=$(base64 -w0 \"$ATTACH_PATH\")\n";
+        content += "  printf '{\"inlineFile\": {\"data\": \"%s\", \"mimeType\": \"%s\"}}\\n' \"$ATTACH_B64\" \"$ATTACH_MIME\"\n";
+        content += "else\n";
+        content += "  ATTACH_TEXT=$(head -c 100000 \"$ATTACH_PATH\" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || head -c 50000 \"$ATTACH_PATH\")\n";
+        content += "  ATTACH_NAME=$(basename \"$ATTACH_PATH\")\n";
+        content += "  printf '{\"textFile\": {\"content\": %s, \"mimeType\": \"%s\", \"name\": \"%s\"}}\\n' \"$ATTACH_TEXT\" \"$ATTACH_MIME\" \"$ATTACH_NAME\"\n";
+        content += "fi\n";
         return content;
     }
 
@@ -76,16 +112,24 @@ ApiStrategy {
         try {
             const dataJson = JSON.parse(cleanData);
 
-            // Handle inlineFile from buildScriptFileSetup
+            // Handle inlineFile from buildScriptFileSetup (images)
             if (dataJson.inlineFile) {
                 message.fileBase64 = dataJson.inlineFile.data;
                 message.fileMimeType = dataJson.inlineFile.mimeType;
                 return {};
             }
 
+            // Handle textFile from buildScriptFileSetup (non-image files)
+            if (dataJson.textFile) {
+                message.fileTextContent = dataJson.textFile.content;
+                message.fileMimeType = dataJson.textFile.mimeType;
+                if (dataJson.textFile.name) message.localFilePath = dataJson.textFile.name;
+                return {};
+            }
+
             // Error response handling
             if (dataJson.error) {
-                const errorMsg = `**Error**: ${dataJson.error.message || JSON.stringify(dataJson.error)}`;
+                const errorMsg = "**Error**: " + (dataJson.error.message || JSON.stringify(dataJson.error));
                 message.rawContent += errorMsg;
                 message.content += errorMsg;
                 return { finished: true };
@@ -108,7 +152,7 @@ ApiStrategy {
                     const fc = { name: _toolCallName, args: args };
                     message.functionName = _toolCallName;
                     message.functionCall = fc;
-                    const rawEntry = `\n\n[[ Function: ${_toolCallName}(${_toolCallArgs}) ]]\n`;
+                    const rawEntry = "\n\n[[ Function: " + _toolCallName + "(" + _toolCallArgs + ") ]]\n";
                     message.rawContent += rawEntry;
                     _toolCallName = "";
                     _toolCallArgs = "";

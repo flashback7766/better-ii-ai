@@ -10,6 +10,7 @@ import Quickshell
 Rectangle {
     id: root
     property int messageIndex
+    property string modelData
     property var messageData
     property var messageInputField
 
@@ -19,6 +20,7 @@ Rectangle {
     property bool enableMouseSelection: false
     property bool renderMarkdown: true
     property bool editing: false
+    property bool isContinuation: false
 
     // Cached markdown block parsing — only re-parse when content actually changes
     property string _lastParsedContent: ""
@@ -61,6 +63,7 @@ Rectangle {
 
         root.editing = false
         root.messageData.content = newContent;
+        root.messageData.rawContent = newContent;
     }
 
     Keys.onPressed: (event) => {
@@ -83,15 +86,30 @@ Rectangle {
     height: visible ? implicitHeight : 0
     opacity: visible ? 1 : 0
 
+    Behavior on height {
+        animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
+    }
+    Behavior on opacity {
+        NumberAnimation {
+            duration: Appearance.animation.elementMoveFast.duration
+            easing.type: Easing.InOutQuad
+        }
+    }
+
     ColumnLayout { // Main layout of the whole thing
         id: columnLayout
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: messagePadding
+        anchors.leftMargin: messagePadding
+        anchors.rightMargin: messagePadding
+        anchors.bottomMargin: messagePadding
+        anchors.topMargin: root.isContinuation ? 4 : messagePadding
         spacing: root.contentSpacing
 
         Rectangle {
+            id: headerRect
+            visible: !root.isContinuation
             Layout.fillWidth: true
             implicitWidth: headerRowLayout.implicitWidth + 4 * 2
             implicitHeight: headerRowLayout.implicitHeight + 4 * 2
@@ -158,7 +176,7 @@ Rectangle {
                             Layout.alignment: Qt.AlignVCenter
                             Layout.fillWidth: true
                             elide: Text.ElideRight
-                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.pixelSize: Appearance.font.pixelSize.normal + 2
                             color: Appearance.m3colors.m3onSecondaryContainer
                             text: messageData?.role == 'assistant' ? (Ai.models[messageData?.model]?.name ?? messageData?.model ?? 'Assistant') :
                                 (messageData?.role == 'user' && SystemInfo.username) ? SystemInfo.username :
@@ -197,7 +215,7 @@ Rectangle {
                         visible: messageData?.role === 'assistant'
 
                         onClicked: {
-                            Ai.regenerate(root.messageIndex)
+                            Ai.regenerateById(root.modelData)
                         }
                         
                         StyledToolTip {
@@ -258,7 +276,7 @@ Rectangle {
                         id: deleteButton
                         buttonIcon: "close"
                         onClicked: {
-                            Ai.removeMessage(root.messageIndex)
+                            Ai.removeMessageById(root.modelData)
                         }
                         StyledToolTip {
                             text: Translation.tr("Delete")

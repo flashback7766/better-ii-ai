@@ -38,7 +38,8 @@ Item {
         return s.includes("code 0 (");
     }
 
-    property var collapseAnimation: messageTextBlock.implicitHeight > 40 ? Appearance.animation.elementMoveEnter : Appearance.animation.elementMoveFast
+    // Use a safe threshold — don't reference messageTextBlock (forward ref, undefined on first eval)
+    property var collapseAnimation: root.implicitHeight > 120 ? Appearance.animation.elementMoveEnter : Appearance.animation.elementMoveFast
     property bool collapsed: root.completed // Auto-collapse when done
 
     // Animated dots (0-3) while thinking/running — updated by a Timer so they actually animate
@@ -184,7 +185,7 @@ Item {
                 id: contentBackground
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.bottom: parent.bottom
+                anchors.top: parent.top
                 implicitHeight: messageTextBlock.implicitHeight
                 color: Appearance.colors.colLayer2
 
@@ -199,7 +200,7 @@ Item {
                     id: messageTextBlock
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.bottom: parent.bottom
+                    anchors.top: parent.top
                     segmentContent: root.segmentContent
                 }
             }

@@ -13,6 +13,10 @@ import Quickshell.Io
 
 Item {
     id: root
+    implicitWidth: 450
+    Layout.fillWidth: true
+    Layout.minimumWidth: 350
+    
     property real padding: 4
     property var inputField: messageInputField
     property string commandPrefix: "/"
@@ -58,7 +62,7 @@ Item {
     property var allCommands: [
         {
             name: "attach",
-            description: Translation.tr("Attach a file. Only works with Gemini."),
+            description: Translation.tr("Attach a file (image, PDF, text, code, etc.). Supported by Gemini (full), OpenAI and Anthropic (images). Usage: /attach /path/to/file"),
             execute: args => {
                 Ai.attachFile(args.join(" ").trim());
             }
@@ -137,6 +141,40 @@ Item {
             description: Translation.tr("Start new chat (saves current to history buffer)"),
             execute: () => {
                 Ai.newChat();
+            }
+        },
+        {
+            name: "clear",
+            description: Translation.tr("Clear chat without saving to history"),
+            execute: () => {
+                // Destroy all message objects, skip history save
+                for (let i = 0; i < Ai.messageIDs.length; i++) {
+                    const msg = Ai.messageByID[Ai.messageIDs[i]];
+                    if (msg && msg.destroy) msg.destroy();
+                }
+                Ai.messageIDs = [];
+                Ai.messageByID = ({});
+                Ai.tokenCount.input = -1;
+                Ai.tokenCount.output = -1;
+                Ai.tokenCount.total = -1;
+                Ai.generationSpeed = 0;
+                Ai.pendingFilePath = "";
+            }
+        },
+        {
+            name: "copy",
+            description: Translation.tr("Copy last AI response to clipboard"),
+            execute: () => {
+                const ids = Ai.messageIDs;
+                for (let i = ids.length - 1; i >= 0; i--) {
+                    const msg = Ai.messageByID[ids[i]];
+                    if (msg && msg.role === "assistant" && msg.rawContent && msg.rawContent.length > 0) {
+                        Quickshell.clipboardText = msg.rawContent;
+                        Ai.addMessage(Translation.tr("Last response copied to clipboard ✓"), Ai.interfaceRole);
+                        return;
+                    }
+                }
+                Ai.addMessage(Translation.tr("No AI response to copy"), Ai.interfaceRole);
             }
         },
         {
@@ -306,35 +344,37 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             if (isOpen) close(); else open();
         }
 
-        // Opacity animation
+        // Opacity + translate animation (Google-style: fade + slide up)
         opacity: isOpen ? 1 : 0
         Behavior on opacity {
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
         }
 
-        // Scale animation from bottom-left (button origin)
-        transform: Scale {
-            id: popupScale
-            origin.x: 0
-            origin.y: modelPickerPopup.height
-            xScale: modelPickerPopup.isOpen ? 1 : 0.92
-            yScale: modelPickerPopup.isOpen ? 1 : 0.92
-            Behavior on xScale {
-                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-            }
-            Behavior on yScale {
-                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-            }
+        // Y offset spring-in
+        property real yOffset: isOpen ? 0 : 10
+        Behavior on yOffset {
+            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
         }
+        transform: [
+            Translate { y: modelPickerPopup.yOffset },
+            Scale {
+                origin.x: modelPickerPopup.width / 2
+                origin.y: modelPickerPopup.height
+                xScale: modelPickerPopup.isOpen ? 1 : 0.96
+                yScale: modelPickerPopup.isOpen ? 1 : 0.96
+                Behavior on xScale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                Behavior on yScale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            }
+        ]
 
-        width: 280
-        readonly property real maxPopupHeight: 400
-        readonly property real naturalHeight: modelPickerColumn.implicitHeight + 12
+        width: 320
+        readonly property real maxPopupHeight: 440
+        readonly property real naturalHeight: modelPickerColumn.implicitHeight + 16
         implicitHeight: Math.min(naturalHeight, maxPopupHeight)
-        radius: Appearance.rounding.normal
+        radius: Appearance.rounding.large ?? 16
         color: Appearance.colors.colLayer2Base
         border.width: 1
-        border.color: Appearance.colors.colOutlineVariant
+        border.color: Qt.alpha(Appearance.colors.colOutlineVariant, 0.8)
         clip: true
 
         // Close when clicking outside
@@ -415,12 +455,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 width: modelPickerFlickable.width
                 spacing: 2
 
+                Item { Layout.fillWidth: true; implicitHeight: 4 }
                 StyledText {
-                    Layout.leftMargin: 8
-                    Layout.topMargin: 2
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    color: Appearance.colors.colSubtext
-                    text: Translation.tr("Select model")
+                    Layout.leftMargin: 12
+                    font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                    font.weight: Font.Medium
+                    color: Appearance.m3colors.m3primary
+                    text: Translation.tr("Choose model")
                 }
 
                 // Custom models section (only shown when custom models exist)
@@ -432,7 +473,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     StyledText {
                         Layout.leftMargin: 8
                         Layout.topMargin: 2
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
                         color: Appearance.colors.colSubtext
                         opacity: 0.6
                         text: Translation.tr("Custom")
@@ -443,26 +484,31 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         delegate: RippleButton {
                             required property var modelData
                             Layout.fillWidth: true
-                            implicitHeight: _row.implicitHeight + 8
+                            implicitHeight: _row.implicitHeight + 14
                             buttonRadius: Appearance.rounding.small
                             toggled: Ai.currentModelId === modelData
-                            colBackground: toggled ? Appearance.colors.colSecondaryContainer : "transparent"
-                            colBackgroundHover: Appearance.colors.colLayer2Hover
+                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.7) : "transparent"
+                            colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                             onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                             contentItem: RowLayout {
                                 id: _row
-                                anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                                spacing: 8
+                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
+                                spacing: 10
                                 CustomIcon {
                                     visible: Ai.models[modelData]?.icon?.length > 0
-                                    width: Appearance.font.pixelSize.normal; height: width
+                                    width: 18; height: 18
                                     source: Ai.models[modelData]?.icon ?? ""; colorize: true
-                                    color: Appearance.m3colors.m3onSurface
+                                    color: parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
+                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                                 ColumnLayout {
-                                    Layout.fillWidth: true; spacing: 0
-                                    StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
-                                    StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                                    Layout.fillWidth: true; spacing: 1
+                                    StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: parent.parent.toggled ? "black" : Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
+                                    StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: parent.parent.toggled ? "black" : Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                                }
+                                MaterialSymbol {
+                                    visible: parent.parent.toggled
+                                    text: "check"; iconSize: 16; color: Appearance.m3colors.m3primary
                                 }
                                 MaterialSymbol {
                                     text: "close"; iconSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext
@@ -488,7 +534,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     visible: modelPickerPopup.hasCustomModels
                     Layout.leftMargin: 8
                     Layout.topMargin: 2
-                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    font.pixelSize: Appearance.font.pixelSize.smaller + 2
                     color: Appearance.colors.colSubtext
                     opacity: 0.6
                     text: Translation.tr("Built-in")
@@ -499,30 +545,36 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     delegate: RippleButton {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: _row2.implicitHeight + 8
+                        implicitHeight: _row2.implicitHeight + 14
                         buttonRadius: Appearance.rounding.small
                         toggled: Ai.currentModelId === modelData
-                        colBackground: toggled ? Appearance.colors.colSecondaryContainer : "transparent"
-                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.7) : "transparent"
+                        colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                         onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                         contentItem: RowLayout {
                             id: _row2
-                            anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                            spacing: 8
+                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
+                            spacing: 10
                             CustomIcon {
                                 visible: Ai.models[modelData]?.icon?.length > 0
-                                width: Appearance.font.pixelSize.normal; height: width
+                                width: 18; height: 18
                                 source: Ai.models[modelData]?.icon ?? ""; colorize: true
-                                color: Appearance.m3colors.m3onSurface
+                                color: parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
+                                Behavior on color { ColorAnimation { duration: 150 } }
                             }
                             ColumnLayout {
-                                Layout.fillWidth: true; spacing: 0
-                                StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
-                                StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                                Layout.fillWidth: true; spacing: 1
+                                StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: parent.parent.toggled ? "black" : Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
+                                StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: parent.parent.toggled ? "black" : Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                            }
+                            MaterialSymbol {
+                                visible: parent.parent.toggled
+                                text: "check"; iconSize: 16; color: Appearance.m3colors.m3primary
                             }
                         }
                     }
                 }
+                Item { Layout.fillWidth: true; implicitHeight: 4 }
             }
         }
     }
@@ -557,29 +609,32 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
         opacity: isOpen ? 1 : 0
         Behavior on opacity {
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
         }
 
-        transform: Scale {
-            origin.x: 0
-            origin.y: functionsPopup.height
-            xScale: functionsPopup.isOpen ? 1 : 0.92
-            yScale: functionsPopup.isOpen ? 1 : 0.92
-            Behavior on xScale {
-                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-            }
-            Behavior on yScale {
-                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-            }
+        property real yOffset: isOpen ? 0 : 10
+        Behavior on yOffset {
+            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
         }
+        transform: [
+            Translate { y: functionsPopup.yOffset },
+            Scale {
+                origin.x: functionsPopup.width / 2
+                origin.y: functionsPopup.height
+                xScale: functionsPopup.isOpen ? 1 : 0.96
+                yScale: functionsPopup.isOpen ? 1 : 0.96
+                Behavior on xScale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                Behavior on yScale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+            }
+        ]
 
-        width: 280
+        width: 300
         implicitHeight: functionsPopupColumn.implicitHeight + 16
         clip: true
-        radius: Appearance.rounding.normal
+        radius: Appearance.rounding.large ?? 16
         color: Appearance.colors.colLayer2Base
         border.width: 1
-        border.color: Appearance.colors.colOutlineVariant
+        border.color: Qt.alpha(Appearance.colors.colOutlineVariant, 0.8)
 
         // Close when clicking outside
         Connections {
@@ -593,15 +648,16 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         ColumnLayout {
             id: functionsPopupColumn
             anchors.fill: parent
-            anchors.margins: 6
-            spacing: 6
+            anchors.margins: 8
+            spacing: 4
 
             // --- Tools section ---
+            Item { implicitHeight: 2 }
             StyledText {
-                Layout.leftMargin: 8
-                Layout.topMargin: 2
-                font.pixelSize: Appearance.font.pixelSize.smaller
-                color: Appearance.colors.colSubtext
+                Layout.leftMargin: 4
+                font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                font.weight: Font.Medium
+                color: Appearance.m3colors.m3primary
                 text: Translation.tr("Tools")
             }
 
@@ -610,11 +666,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 delegate: RippleButton {
                     required property var modelData
                     Layout.fillWidth: true
-                    implicitHeight: _toolRow.implicitHeight + 8
+                    implicitHeight: _toolRow.implicitHeight + 10
                     buttonRadius: Appearance.rounding.small
                     toggled: Ai.currentTool === modelData
-                    colBackground: toggled ? Appearance.colors.colSecondaryContainer : "transparent"
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.7) : "transparent"
+                    colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                     onClicked: {
                         Ai.setTool(modelData);
                         functionsPopup.close();
@@ -622,29 +678,48 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     contentItem: RowLayout {
                         id: _toolRow
                         anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        spacing: 8
-                        MaterialSymbol {
-                            text: modelData === "functions" ? "build" : modelData === "search" ? "search" : "block"
-                            iconSize: Appearance.font.pixelSize.normal
-                            color: Appearance.m3colors.m3onSurface
+                        spacing: 10
+                        // Colored icon pill
+                        Rectangle {
+                            width: 30; height: 30; radius: 8
+                            color: {
+                                if (modelData === "functions") return Qt.alpha(Appearance.m3colors.m3primary, 0.15);
+                                if (modelData === "search") return Qt.alpha("#34A853", 0.15);
+                                return Qt.alpha(Appearance.colors.colSubtext, 0.1);
+                            }
+                            MaterialSymbol {
+                                anchors.centerIn: parent
+                                text: modelData === "functions" ? "build" : modelData === "search" ? "search" : "block"
+                                iconSize: 16
+                                color: {
+                                    if (modelData === "functions") return Appearance.m3colors.m3primary;
+                                    if (modelData === "search") return "#34A853";
+                                    return Appearance.colors.colSubtext;
+                                }
+                            }
                         }
                         ColumnLayout {
-                            Layout.fillWidth: true; spacing: 0
+                            Layout.fillWidth: true; spacing: 1
                             StyledText {
                                 Layout.fillWidth: true
-                                font.pixelSize: Appearance.font.pixelSize.small
-                                color: Appearance.m3colors.m3onSurface
+                                font.pixelSize: Appearance.font.pixelSize.small + 2
+                                font.weight: Font.Medium
+                                color: parent.parent.toggled ? "black" : Appearance.m3colors.m3onSurface
                                 text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
                                 elide: Text.ElideRight
                             }
                             StyledText {
                                 Layout.fillWidth: true
                                 visible: text.length > 0
-                                font.pixelSize: Appearance.font.pixelSize.smaller
-                                color: Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                                color: parent.parent.toggled ? "black" : Appearance.colors.colSubtext
                                 text: (Ai.toolDescriptions[modelData] ?? "").split("\n")[0] ?? ""
                                 elide: Text.ElideRight
                             }
+                        }
+                        MaterialSymbol {
+                            visible: parent.parent.toggled
+                            text: "check"; iconSize: 16; color: Appearance.m3colors.m3primary
                         }
                     }
                 }
@@ -680,12 +755,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 0
                         StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.small
+                            font.pixelSize: Appearance.font.pixelSize.small + 2
                             color: Appearance.m3colors.m3onSurface
                             text: Translation.tr("Extended thinking")
                         }
                         StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            font.pixelSize: Appearance.font.pixelSize.smaller + 2
                             color: Appearance.colors.colSubtext
                             text: Translation.tr("Think longer for complex tasks")
                         }
@@ -710,13 +785,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         MouseArea {
                             anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                if (Ai.thinkingEnabled && Ai.thinkingLevel > 0) {
-                                    Ai.thinkingEnabled = false; Ai.thinkingLevel = 0;
-                                } else {
-                                    Ai.thinkingEnabled = true; Ai.thinkingLevel = 2;
-                                }
-                                Persistent.states.ai.thinkingEnabled = Ai.thinkingEnabled;
-                                Persistent.states.ai.thinkingLevel = Ai.thinkingLevel;
+                                Ai.thinkingEnabled = !Ai.thinkingEnabled;
+                                Ai.thinkingLevel = Ai.thinkingEnabled ? 2 : 0;
+                                Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
+                                Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
                             }
                         }
                     }
@@ -729,7 +801,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     spacing: 4
                     StyledText {
                         Layout.leftMargin: 8
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
                         color: Appearance.colors.colSubtext
                         text: Translation.tr("Thinking Level")
                     }
@@ -745,8 +817,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2Hover
                                 onClicked: {
                                     Ai.thinkingLevel = modelData.l; Ai.thinkingEnabled = modelData.l > 0;
-                                    Persistent.states.ai.thinkingEnabled = Ai.thinkingEnabled;
-                                    Persistent.states.ai.thinkingLevel = Ai.thinkingLevel;
+                                    Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
+                                    Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
                                 }
                                 contentItem: StyledText {
                                     anchors.centerIn: parent
@@ -779,12 +851,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 ColumnLayout {
                     Layout.fillWidth: true; spacing: 0
                     StyledText {
-                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.pixelSize: Appearance.font.pixelSize.small + 2
                         color: Appearance.m3colors.m3onSurface
                         text: Translation.tr("Auto-confirm")
                     }
                     StyledText {
-                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
                         color: Appearance.colors.colSubtext
                         text: Translation.tr("Run shell commands automatically")
                     }
@@ -810,7 +882,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             Ai.functionsAutoConfirm = !Ai.functionsAutoConfirm;
-                            Persistent.states.ai.functionsAutoConfirm = Ai.functionsAutoConfirm;
+                            Ai.savePersistentState("functionsAutoConfirm", Ai.functionsAutoConfirm);
                         }
                     }
                 }
@@ -855,7 +927,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 color: Appearance.colors.colSubtext
             }
             StyledText {
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.pixelSize: Appearance.font.pixelSize.small + 2
                 text: statusItem.statusText
                 color: Appearance.colors.colSubtext
                 animateChange: true
@@ -944,7 +1016,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         visible: Ai.tokenCount.total > 0
                         icon: "token"
                         statusText: Ai.tokenCount.total
-                        description: Translation.tr("Total token count\nInput: %1\nOutput: %2").arg(Ai.tokenCount.input).arg(Ai.tokenCount.output)
+                        description: Translation.tr("Tokens used in last request\nInput: %1\nOutput: %2").arg(Ai.tokenCount.input).arg(Ai.tokenCount.output)
                     }
                     StatusSeparator {
                         visible: Ai.generationSpeed > 0
@@ -959,7 +1031,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         visible: Ai.sessionCost > 0.0001
                         icon: "payments"
                         statusText: "$" + Ai.sessionCost.toFixed(4)
-                        description: Translation.tr("Estimated session cost")
+                        description: Translation.tr("Estimated session cost (accumulated)")
                     }
                     StatusSeparator {
                         visible: Ai.sessionSummary.length > 0
@@ -983,7 +1055,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 id: messageListView
                 z: 0
                 anchors.fill: parent
-                spacing: 10
+                spacing: 12
                 popin: false
                 topMargin: statusBg.implicitHeight + statusBg.anchors.topMargin * 2
 
@@ -1006,7 +1078,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     Qt.callLater(positionViewAtEnd);
                 }
 
-                add: null // Prevent function calls from being janky
+                // Smooth fade+slide pop-in for new messages
+                add: Transition {
+                    ParallelAnimation {
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.OutCubic }
+                        NumberAnimation { property: "y"; from: 14; duration: 220; easing.type: Easing.OutCubic }
+                    }
+                }
 
                 model: ScriptModel {
                     values: Ai.messageIDs.filter(id => {
@@ -1018,9 +1096,16 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     required property var modelData
                     required property int index
                     messageIndex: index
-                    messageData: {
-                        Ai.messageByID[modelData];
-                    }
+                    // BUGFIX: was missing `return`, so messageData was always undefined
+                    messageData: Ai.messageByID[modelData] ?? null
+
+                    property var prevMessageData: index > 0 ? Ai.messageByID[messageListView.model.values[index - 1]] : null
+                    isContinuation: prevMessageData != null 
+                        && messageData != null
+                        && messageData.role === prevMessageData?.role 
+                        && messageData.model === prevMessageData?.model
+                        && messageData.role === "assistant"
+
                     messageInputField: root.inputField
                 }
             }
@@ -1028,8 +1113,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             PagePlaceholder {
                 z: 2
                 shown: Ai.messageIDs.length === 0
-                icon: "neurology"
-                title: Translation.tr("Large language models")
+                icon: "chat_bubble"
+                title: Translation.tr("AI Assistant")
                 description: Translation.tr("Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar")
                 shape: MaterialShape.Shape.PixelCircle
             }
@@ -1065,7 +1150,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     contentItem: RowLayout {
                         spacing: 2
                         StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.small
+                            font.pixelSize: Appearance.font.pixelSize.small + 2
                             color: Appearance.m3colors.m3onSurface
                             horizontalAlignment: Text.AlignHCenter
                             text: modelData.displayName ?? modelData.name
@@ -1080,7 +1165,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             StyledText {
                                 anchors.centerIn: parent
                                 text: "×"
-                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.pixelSize: Appearance.font.pixelSize.small + 2
                                 color: Appearance.colors.colSubtext
                             }
                             MouseArea {
@@ -1132,7 +1217,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             id: inputWrapper
             property real spacing: 5
             Layout.fillWidth: true
-            radius: Appearance.rounding.normal - root.padding
+            radius: 24 // Increased radius for rounder look
             color: Appearance.colors.colLayer2
             implicitHeight: Math.max(inputFieldRowLayout.implicitHeight + inputFieldRowLayout.anchors.topMargin + commandButtonsRow.implicitHeight + commandButtonsRow.anchors.bottomMargin + spacing, 45) + (attachedFileIndicator.implicitHeight + spacing + attachedFileIndicator.anchors.topMargin)
             clip: true
@@ -1141,13 +1226,28 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
             }
 
+            // Focus glow ring
+            Rectangle {
+                anchors.fill: parent
+                // Draw inside the parent to avoid being clipped by parent's bounding box
+                radius: parent.radius
+                color: "transparent"
+                border.color: Appearance.m3colors.m3primary
+                border.width: 2
+                opacity: messageInputField.activeFocus ? 0.8 : 0
+                Behavior on opacity {
+                    NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                }
+                z: 10
+            }
+
             AttachedFileIndicator {
                 id: attachedFileIndicator
                 anchors {
                     top: parent.top
                     left: parent.left
                     right: parent.right
-                    margins: visible ? 5 : 0
+                    margins: visible ? 10 : 0
                 }
                 filePath: Ai.pendingFilePath
                 onRemove: Ai.attachFile("")
@@ -1159,7 +1259,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     bottom: commandButtonsRow.top
                     left: parent.left
                     right: parent.right
-                    bottomMargin: 5
+                    bottomMargin: 8
                 }
                 spacing: 0
 
@@ -1174,7 +1274,9 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         id: messageInputField
                         anchors.fill: parent
                         wrapMode: TextArea.Wrap
-                        padding: 10
+                        padding: 12
+                        leftPadding: 16
+                        rightPadding: 16
                         color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
                         placeholderText: Translation.tr('Message the model... "%1" for commands').arg(root.commandPrefix)
 
@@ -1322,8 +1424,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_V) {
                                 // Intercept Ctrl+V to handle image/file pasting
                                 if (event.modifiers & Qt.ShiftModifier) {
-                                    // Let Shift+Ctrl+V = plain paste
-                                    messageInputField.text += Quickshell.clipboardText;
+                                    // Let Shift+Ctrl+V = plain paste at cursor position
+                                    messageInputField.insert(messageInputField.cursorPosition, Quickshell.clipboardText);
                                     event.accepted = true;
                                     return;
                                 }
@@ -1362,36 +1464,65 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         }
                     }
                 }
+                
+                RippleButton { // Quick Attach Button
+                    id: attachButton
+                    Layout.alignment: Qt.AlignBottom
+                    Layout.rightMargin: 2
+                    Layout.bottomMargin: 2
+                    implicitWidth: 38
+                    implicitHeight: 38
+                    buttonRadius: 19
+                    colBackground: "transparent"
+                    colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                    onClicked: {
+                        messageInputField.text = root.commandPrefix + "attach ";
+                        messageInputField.cursorPosition = messageInputField.text.length;
+                        messageInputField.forceActiveFocus();
+                    }
+                    StyledToolTip { text: Translation.tr("Attach file") }
+                    
+                    contentItem: MaterialSymbol {
+                        anchors.centerIn: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        iconSize: 22
+                        color: Appearance.colors.colSubtext
+                        text: "add"
+                    }
+                }
+
                 RippleButton { // Send button / Stop button
                     id: sendButton
                     Layout.alignment: Qt.AlignBottom
-                    Layout.rightMargin: 5
-                    implicitWidth: 40
-                    implicitHeight: 40
-                    buttonRadius: Appearance.rounding.small
+                    Layout.rightMargin: 6
+                    Layout.bottomMargin: 2
+                    implicitWidth: 38
+                    implicitHeight: 38
+                    buttonRadius: 19  // Full circle (FAB style)
                     enabled: messageInputField.text.length > 0 || Ai.isGenerating
                     toggled: enabled
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: sendButton.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: {
-                            if (Ai.isGenerating) {
-                                Ai.abortAll();
-                            } else {
-                                const inputText = messageInputField.text;
-                                root.handleInput(inputText);
-                                messageInputField.clear();
-                            }
+                    // Micro-scale animation on press
+                    scale: sendButton.down ? 0.92 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+
+                    onClicked: {
+                        if (Ai.isGenerating) {
+                            Ai.abortAll();
+                        } else {
+                            const inputText = messageInputField.text;
+                            root.handleInput(inputText);
+                            messageInputField.clear();
                         }
                     }
 
                     contentItem: MaterialSymbol {
                         anchors.centerIn: parent
                         horizontalAlignment: Text.AlignHCenter
-                        iconSize: 22
+                        iconSize: 20
                         color: sendButton.enabled ? Appearance.m3colors.m3onPrimary : Appearance.colors.colOnLayer2Disabled
                         text: Ai.isGenerating ? "stop" : "arrow_upward"
+                        Behavior on text { PropertyAnimation { duration: 0 } }
                     }
                 }
             }
@@ -1401,56 +1532,103 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 5
-                anchors.leftMargin: 10
-                anchors.rightMargin: 5
-                spacing: 4
+                anchors.bottomMargin: 10
+                anchors.leftMargin: 12
+                anchors.rightMargin: 8
+                spacing: 8
 
-                property var commandsShown: [
-                    {
-                        name: "",
-                        sendDirectly: false,
-                        dontAddSpace: true
-                    },
-                    {
-                        name: "new",
-                        sendDirectly: true
-                    },
-                ]
+
+                // Commands shortcut button
+                RippleButton {
+                    id: commandsShortcutButton
+                    implicitWidth: commandsShortcutRow.implicitWidth + 20
+                    implicitHeight: 38
+                    buttonRadius: 19
+                    colBackground: Appearance.colors.colLayer2
+                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    onClicked: {
+                        messageInputField.text = root.commandPrefix;
+                        messageInputField.cursorPosition = messageInputField.text.length;
+                        messageInputField.forceActiveFocus();
+                    }
+                    StyledToolTip { text: Translation.tr("Open commands") }
+                    contentItem: RowLayout {
+                        id: commandsShortcutRow
+                        anchors.centerIn: parent
+                        spacing: 3
+                        MaterialSymbol {
+                            text: "terminal"
+                            iconSize: Appearance.font.pixelSize.small
+                            color: Appearance.m3colors.m3onSurface
+                        }
+                    }
+                }
+
+                // Attach file button
+                RippleButton {
+                    id: attachFileButton
+                    implicitWidth: attachFileRow.implicitWidth + 20
+                    implicitHeight: 38
+                    buttonRadius: 19
+                    colBackground: Appearance.colors.colLayer2
+                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    onClicked: {
+                        messageInputField.text = root.commandPrefix + "attach ";
+                        messageInputField.cursorPosition = messageInputField.text.length;
+                        messageInputField.forceActiveFocus();
+                    }
+                    StyledToolTip { text: Translation.tr("Attach file") }
+                    contentItem: RowLayout {
+                        id: attachFileRow
+                        anchors.centerIn: parent
+                        spacing: 3
+                        MaterialSymbol {
+                            text: "attach_file"
+                            iconSize: Appearance.font.pixelSize.small
+                            color: Appearance.m3colors.m3onSurface
+                        }
+                    }
+                }
 
                 RippleButton {
                     // Model picker button
                     id: modelPickerButton
-                    implicitWidth: modelPickerRow.implicitWidth + 12
-                    implicitHeight: modelPickerRow.implicitHeight + 8
-                    buttonRadius: Appearance.rounding.small
-                    colBackground: Appearance.colors.colLayer2
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    implicitWidth: modelPickerRow.implicitWidth + 24
+                    implicitHeight: 38
+                    buttonRadius: 19
+                    colBackground: Qt.alpha(Appearance.m3colors.m3primary, 0.08)
+                    colBackgroundHover: Qt.alpha(Appearance.m3colors.m3primary, 0.16)
+
+                    Behavior on implicitWidth {
+                        NumberAnimation { duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.OutQuint }
+                    }
 
                     onClicked: modelPickerPopup.toggle()
 
                     contentItem: RowLayout {
                         id: modelPickerRow
                         anchors.centerIn: parent
-                        spacing: 4
+                        spacing: 5
                         CustomIcon {
                             visible: Ai.models[Ai.currentModelId]?.icon?.length > 0
-                            width: Appearance.font.pixelSize.small
-                            height: Appearance.font.pixelSize.small
+                            width: 14
+                            height: 14
                             source: Ai.models[Ai.currentModelId]?.icon ?? ""
                             colorize: true
-                            color: Appearance.m3colors.m3onSurface
+                            color: Appearance.m3colors.m3primary
                         }
                         StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            color: Appearance.m3colors.m3onSurface
+                            font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                            font.weight: Font.Medium
+                            color: Appearance.m3colors.m3primary
                             text: Ai.getModel()?.name ?? ""
                             elide: Text.ElideRight
                         }
                         MaterialSymbol {
-                            text: "expand_more"
-                            iconSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
+                            text: modelPickerPopup.isOpen ? "expand_less" : "expand_more"
+                            iconSize: 14
+                            color: Appearance.m3colors.m3primary
+                            Behavior on text { PropertyAnimation { duration: 0 } }
                         }
                     }
                 }
@@ -1458,11 +1636,15 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 RippleButton {
                     // Functions & Thinking popup button
                     id: functionsButton
-                    implicitWidth: functionsButtonRow.implicitWidth + 12
-                    implicitHeight: functionsButtonRow.implicitHeight + 8
-                    buttonRadius: Appearance.rounding.small
+                    implicitWidth: functionsButtonRow.implicitWidth + 20
+                    implicitHeight: 38
+                    buttonRadius: 19
                     colBackground: Appearance.colors.colLayer2
                     colBackgroundHover: Appearance.colors.colLayer2Hover
+
+                    Behavior on implicitWidth {
+                        NumberAnimation { duration: Appearance.animation.elementMoveFast.duration; easing.type: Easing.OutQuint }
+                    }
 
                     onClicked: functionsPopup.toggle()
 
@@ -1476,7 +1658,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             color: Appearance.m3colors.m3onSurface
                         }
                         StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            font.pixelSize: Appearance.font.pixelSize.smaller + 2
                             color: Appearance.m3colors.m3onSurface
                             text: Ai.currentTool.charAt(0).toUpperCase() + Ai.currentTool.slice(1)
                             elide: Text.ElideRight
@@ -1500,10 +1682,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 color: Appearance.m3colors.m3onPrimary
                                 text: {
                                     const style = Ai.currentThinkingStyle;
-                                    if (style === "anthropic") {
-                                        const labels = ["", "L", "M", "H"];
-                                        return "T:" + labels[Ai.thinkingLevel];
-                                    } else if (style === "gemini") {
+                                    if (style === "anthropic" || style === "gemini") {
                                         const labels = ["", "L", "M", "H"];
                                         return "T:" + labels[Ai.thinkingLevel];
                                     }
@@ -1523,31 +1702,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     Layout.fillWidth: true
                 }
 
-                ButtonGroup {
-                    // Command buttons
-                    padding: 0
 
-                    Repeater {
-                        // Command buttons
-                        model: commandButtonsRow.commandsShown
-                        delegate: ApiCommandButton {
-                            property string commandRepresentation: `${root.commandPrefix}${modelData.name}`
-                            buttonText: commandRepresentation
-                            downAction: () => {
-                                if (modelData.sendDirectly) {
-                                    root.handleInput(commandRepresentation);
-                                } else {
-                                    messageInputField.text = commandRepresentation + (modelData.dontAddSpace ? "" : " ");
-                                    messageInputField.cursorPosition = messageInputField.text.length;
-                                    messageInputField.forceActiveFocus();
-                                }
-                                if (modelData.name === "clear") {
-                                    messageInputField.text = "";
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
