@@ -107,7 +107,7 @@ ApiStrategy {
 
         const requestData = {
             "model": model.model,
-            "max_tokens": (thinkingEnabled && thinkingLevel > 0) ? 16000 : 8096,
+            "max_tokens": (thinkingEnabled && thinkingLevel > 0) ? 32000 : 8096,
             "messages": anthropicMessages,
             "temperature": (thinkingEnabled && thinkingLevel > 0) ? 1 : temperature,
             "stream": true
@@ -118,10 +118,11 @@ ApiStrategy {
         }
 
         if (thinkingEnabled && thinkingLevel > 0) {
-            const budgets = [0, 4096, 10000, 32000];
+            // Off=0, Normal=1 (8k budget), Max=2 (32k budget)
+            const budgets = [0, 8000, 32000];
             requestData["thinking"] = {
                 "type": "enabled",
-                "budget_tokens": budgets[Math.min(thinkingLevel, 3)]
+                "budget_tokens": budgets[Math.min(thinkingLevel, 2)]
             };
         }
 

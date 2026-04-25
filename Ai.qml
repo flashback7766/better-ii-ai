@@ -91,7 +91,10 @@ Singleton {
     function currentModelThinkingStyle() {
         return root.modelThinkingStyles[currentModelId] ?? ""
     }
-    property string currentThinkingStyle: root.modelThinkingStyles[currentModelId] ?? ""
+    property string currentThinkingStyle: {
+        const style = root.modelThinkingStyles[root.currentModelId];
+        return style ?? "";
+    }
 
     property QtObject tokenCount: QtObject {
         property int input: -1
@@ -119,7 +122,6 @@ Singleton {
 
     // Thinking style per model — "gemini" uses thinking_level, "anthropic" uses budget_tokens
     readonly property var modelThinkingStyles: ({
-        "gemini-3.1-flash-lite": "gemini",
         "gemini-3-flash": "gemini",
         "gemini-3.1-pro": "gemini",
         "claude-sonnet-4-6": "anthropic",
@@ -355,7 +357,6 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: ~$0.25/M input, ~$1.50/M output\n\n**Instructions**: Log into Google account → AI Studio → Get API key"),
             "api_format": "gemini",
-            "thinking_style": "gemini",
         }),
         "gemini-3-flash": aiModelComponent.createObject(this, {
             "name": "Gemini Flash",
@@ -726,7 +727,13 @@ Singleton {
         if (modelList.indexOf(modelId) !== -1) {
             root.currentModelId = modelId
             if (setPersistentState) root.savePersistentState("model", modelId)
-            
+
+            // Reset thinking state if new model doesn't support it
+            const newStyle = root.modelThinkingStyles[modelId] ?? "";
+            if (newStyle === "") {
+                root.thinkingEnabled = false;
+                root.thinkingLevel = 0;
+            }
             if (feedback) root.addMessage(Translation.tr("Switched to **%1**").arg(models[modelId].name), Ai.interfaceRole);
             const model = models[modelId]
             // See if policy prevents online models

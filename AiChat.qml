@@ -13,7 +13,7 @@ import Quickshell.Io
 
 Item {
     id: root
-    implicitWidth: 450
+    implicitWidth: 560
     Layout.fillWidth: true
     Layout.minimumWidth: 350
     
@@ -367,8 +367,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 320
-        readonly property real maxPopupHeight: 440
+        width: 360
+        readonly property real maxPopupHeight: 300
         readonly property real naturalHeight: modelPickerColumn.implicitHeight + 16
         implicitHeight: Math.min(naturalHeight, maxPopupHeight)
         radius: Appearance.rounding.large ?? 16
@@ -484,11 +484,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         delegate: RippleButton {
                             required property var modelData
                             Layout.fillWidth: true
-                            implicitHeight: _row.implicitHeight + 14
+                            implicitHeight: _row.implicitHeight + 8
                             buttonRadius: Appearance.rounding.small
                             toggled: Ai.currentModelId === modelData
-                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.7) : "transparent"
-                            colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.35) : "transparent"
+                            colBackgroundHover: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.5) : Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                             onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                             contentItem: RowLayout {
                                 id: _row
@@ -503,8 +503,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 1
-                                    StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: parent.parent.toggled ? "black" : Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
-                                    StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: parent.parent.toggled ? "black" : Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                                    StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
+                                    StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
                                 }
                                 MaterialSymbol {
                                     visible: parent.parent.toggled
@@ -545,11 +545,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     delegate: RippleButton {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: _row2.implicitHeight + 14
+                        implicitHeight: _row2.implicitHeight + 8
                         buttonRadius: Appearance.rounding.small
                         toggled: Ai.currentModelId === modelData
-                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.7) : "transparent"
-                        colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.35) : "transparent"
+                        colBackgroundHover: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.5) : Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                         onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                         contentItem: RowLayout {
                             id: _row2
@@ -564,8 +564,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 1
-                                StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: parent.parent.toggled ? "black" : Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
-                                StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: parent.parent.toggled ? "black" : Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                                StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
+                                StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
                             }
                             MaterialSymbol {
                                 visible: parent.parent.toggled
@@ -744,51 +744,44 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 Layout.fillWidth: true
                 spacing: 6
 
-                // Anthropic Style (Toggle)
-                RowLayout {
+                // Anthropic Style (Adaptive Thinking)
+                ColumnLayout {
                     visible: Ai.currentThinkingStyle === "anthropic"
                     Layout.fillWidth: true
-                    Layout.leftMargin: 8
-                    Layout.rightMargin: 8
-                    spacing: 8
+                    spacing: 2
 
-                    ColumnLayout {
-                        Layout.fillWidth: true; spacing: 0
-                        StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.small + 2
-                            color: Appearance.m3colors.m3onSurface
-                            text: Translation.tr("Extended thinking")
-                        }
-                        StyledText {
-                            font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                            color: Appearance.colors.colSubtext
-                            text: Translation.tr("Think longer for complex tasks")
-                        }
+                    StyledText {
+                        Layout.leftMargin: 8
+                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                        color: Appearance.colors.colSubtext
+                        text: Translation.tr("Thinking")
                     }
-
-                    // Toggle component (Manual)
-                    Rectangle {
-                        width: 44; height: 24; radius: 12
-                        color: (Ai.thinkingEnabled && Ai.thinkingLevel > 0) ? Appearance.m3colors.m3primary : Appearance.colors.colLayer1
-                        border.width: 1
-                        border.color: (Ai.thinkingEnabled && Ai.thinkingLevel > 0) ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
-                        Behavior on color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
-
-                        Rectangle {
-                            width: 18; height: 18; radius: 9
-                            anchors.verticalCenter: parent.verticalCenter
-                            x: (Ai.thinkingEnabled && Ai.thinkingLevel > 0) ? parent.width - width - 3 : 3
-                            color: (Ai.thinkingEnabled && Ai.thinkingLevel > 0) ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
-                            Behavior on x { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-                            Behavior on color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
-                        }
-                        MouseArea {
-                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                Ai.thinkingEnabled = !Ai.thinkingEnabled;
-                                Ai.thinkingLevel = Ai.thinkingEnabled ? 2 : 0;
-                                Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
-                                Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
+                    RowLayout {
+                        Layout.fillWidth: true; Layout.leftMargin: 4; Layout.rightMargin: 4; spacing: 3
+                        Repeater {
+                            model: [
+                                { label: "Off",    l: 0 },
+                                { label: "Normal", l: 1 },
+                                { label: "Max",    l: 2 }
+                            ]
+                            delegate: RippleButton {
+                                Layout.fillWidth: true; implicitHeight: 22
+                                buttonRadius: Appearance.rounding.small
+                                property bool isActive: Ai.thinkingLevel === modelData.l
+                                colBackground: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2
+                                colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2Hover
+                                onClicked: {
+                                    Ai.thinkingLevel = modelData.l;
+                                    Ai.thinkingEnabled = modelData.l > 0;
+                                    Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
+                                    Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
+                                }
+                                contentItem: StyledText {
+                                    anchors.centerIn: parent
+                                    font.pixelSize: 9
+                                    color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.m3colors.m3onSurface
+                                    text: modelData.label
+                                }
                             }
                         }
                     }
@@ -798,7 +791,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 ColumnLayout {
                     visible: Ai.currentThinkingStyle === "gemini"
                     Layout.fillWidth: true
-                    spacing: 4
+                    spacing: 2
                     StyledText {
                         Layout.leftMargin: 8
                         font.pixelSize: Appearance.font.pixelSize.smaller + 2
@@ -810,7 +803,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         Repeater {
                             model: [{label:"Off",l:0},{label:"Low",l:1},{label:"Med",l:2},{label:"High",l:3}]
                             delegate: RippleButton {
-                                Layout.fillWidth: true; implicitHeight: 28
+                                Layout.fillWidth: true; implicitHeight: 22
                                 buttonRadius: Appearance.rounding.small
                                 property bool isActive: Ai.thinkingLevel === modelData.l
                                 colBackground: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2
@@ -822,17 +815,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                                 contentItem: StyledText {
                                     anchors.centerIn: parent
-                                    font.pixelSize: 10
+                                    font.pixelSize: 9
                                     color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.m3colors.m3onSurface
                                     text: modelData.label
                                 }
                             }
                         }
-                    }
-                    StyledText {
-                        Layout.leftMargin: 8; Layout.bottomMargin: 2
-                        font.pixelSize: 10; color: Appearance.colors.colSubtext; opacity: 0.7
-                        text: [Translation.tr("Off"), Translation.tr("Low"), Translation.tr("Medium"), Translation.tr("High")][Ai.thinkingLevel]
                     }
                 }
             }
@@ -840,12 +828,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             // --- Global Settings Section ---
             Rectangle {
                 Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 8
-                Layout.topMargin: 4; Layout.bottomMargin: 4
+                Layout.topMargin: 2; Layout.bottomMargin: 2
                 implicitHeight: 1; color: Appearance.colors.colOutlineVariant; opacity: 0.5
             }
 
             RowLayout {
-                Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 12; Layout.bottomMargin: 12
+                Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 12; Layout.bottomMargin: 6
                 spacing: 12
 
                 ColumnLayout {
@@ -1067,15 +1055,27 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
 
                 property int lastResponseLength: 0
+                property bool userScrolledUp: false
+                property bool initialLoadDone: false
                 // Only auto-scroll if user is near the bottom (within 150px)
                 property bool isNearBottom: (contentHeight - contentY - height) < 150
+
+                Component.onCompleted: Qt.callLater(() => { initialLoadDone = true; })
+
                 onContentHeightChanged: {
-                    if (isNearBottom)
+                    if (isNearBottom && !userScrolledUp)
                         Qt.callLater(positionViewAtEnd);
                 }
                 onCountChanged: {
-                    // Auto-scroll when new messages are added
-                    Qt.callLater(positionViewAtEnd);
+                    if (initialLoadDone && !userScrolledUp)
+                        Qt.callLater(positionViewAtEnd);
+                }
+                onMovementStarted: {
+                    if (verticalVelocity < 0)
+                        userScrolledUp = true;
+                }
+                onAtYEndChanged: {
+                    if (atYEnd) userScrolledUp = false;
                 }
 
                 // Smooth fade+slide pop-in for new messages
@@ -1266,6 +1266,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 ScrollView {
                     id: inputScrollView
                     Layout.fillWidth: true
+                    Layout.minimumHeight: 52
                     Layout.preferredHeight: Math.min(root.height * 3/5, messageInputField.height)
                     clip: true
                     ScrollBar.vertical.policy: ScrollBar.AsNeeded
@@ -1274,7 +1275,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         id: messageInputField
                         anchors.fill: parent
                         wrapMode: TextArea.Wrap
-                        padding: 12
+                        padding: 14
                         leftPadding: 16
                         rightPadding: 16
                         color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
@@ -1476,7 +1477,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     colBackground: "transparent"
                     colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                     onClicked: {
-                        messageInputField.text = root.commandPrefix + "attach ";
+                        const attachCmd = root.commandPrefix + "attach ";
+                        if (messageInputField.text.length === 0 || !messageInputField.text.startsWith(attachCmd)) {
+                            messageInputField.text = attachCmd;
+                        }
                         messageInputField.cursorPosition = messageInputField.text.length;
                         messageInputField.forceActiveFocus();
                     }
@@ -1558,32 +1562,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         spacing: 3
                         MaterialSymbol {
                             text: "terminal"
-                            iconSize: Appearance.font.pixelSize.small
-                            color: Appearance.m3colors.m3onSurface
-                        }
-                    }
-                }
-
-                // Attach file button
-                RippleButton {
-                    id: attachFileButton
-                    implicitWidth: attachFileRow.implicitWidth + 20
-                    implicitHeight: 38
-                    buttonRadius: 19
-                    colBackground: Appearance.colors.colLayer2
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
-                    onClicked: {
-                        messageInputField.text = root.commandPrefix + "attach ";
-                        messageInputField.cursorPosition = messageInputField.text.length;
-                        messageInputField.forceActiveFocus();
-                    }
-                    StyledToolTip { text: Translation.tr("Attach file") }
-                    contentItem: RowLayout {
-                        id: attachFileRow
-                        anchors.centerIn: parent
-                        spacing: 3
-                        MaterialSymbol {
-                            text: "attach_file"
                             iconSize: Appearance.font.pixelSize.small
                             color: Appearance.m3colors.m3onSurface
                         }
@@ -1682,7 +1660,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 color: Appearance.m3colors.m3onPrimary
                                 text: {
                                     const style = Ai.currentThinkingStyle;
-                                    if (style === "anthropic" || style === "gemini") {
+                                    if (style === "anthropic") {
+                                        const labels = ["", "Norm", "Max"];
+                                        return "T:" + (labels[Ai.thinkingLevel] ?? "");
+                                    }
+                                    if (style === "gemini") {
                                         const labels = ["", "L", "M", "H"];
                                         return "T:" + labels[Ai.thinkingLevel];
                                     }

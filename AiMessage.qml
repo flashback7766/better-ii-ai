@@ -206,7 +206,7 @@ Rectangle {
                     }
                 }
 
-                ButtonGroup {
+                RowLayout {
                     spacing: 5
 
                     AiMessageControlButton {
