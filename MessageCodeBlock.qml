@@ -34,18 +34,25 @@ ColumnLayout {
     spacing: codeBlockComponentSpacing
 
     Rectangle { // Header bar
+        id: codeBlockHeader
         Layout.fillWidth: true
         topLeftRadius: codeBlockBackgroundRounding
         topRightRadius: codeBlockBackgroundRounding
         bottomLeftRadius: root.isCommandRequest && !root.commandExpanded ? codeBlockBackgroundRounding : Appearance.rounding.unsharpen
         bottomRightRadius: root.isCommandRequest && !root.commandExpanded ? codeBlockBackgroundRounding : Appearance.rounding.unsharpen
-        color: Appearance.colors.colSurfaceContainerHighest
+        color: root.isCommandRequest && headerMouseArea.containsMouse
+            ? Appearance.colors.colLayer2Hover
+            : Appearance.colors.colSurfaceContainerHighest
         implicitHeight: codeBlockTitleBarRowLayout.implicitHeight + codeBlockHeaderPadding * 2
+
+        Behavior on color { ColorAnimation { duration: 120 } }
 
         // Clickable area for command blocks
         MouseArea {
+            id: headerMouseArea
             anchors.fill: parent
             enabled: root.isCommandRequest
+            hoverEnabled: root.isCommandRequest
             cursorShape: root.isCommandRequest ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: root.commandExpanded = !root.commandExpanded
         }
@@ -60,7 +67,7 @@ ColumnLayout {
             spacing: 5
 
             // Status text for command requests
-            Text {
+            StyledText {
                 visible: root.isCommandRequest
                 Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
                 Layout.topMargin: 7
@@ -71,15 +78,14 @@ ColumnLayout {
 
                 text: root.commandSucceeded ? "✅ " + Translation.tr("Command completed")
                     : root.commandFailed ? "❌ " + Translation.tr("Command failed")
-                    : root.commandDone ? "✅ " + Translation.tr("Command completed")
                     : "⚡ " + Translation.tr("Running command") + "..."
 
                 color: root.commandFailed ? Appearance.m3colors.m3error
-                    : root.commandSucceeded || root.commandDone ? Appearance.colors.colOnLayer2
-                    : "#cccccc"
+                    : root.commandSucceeded ? "#4caf50"
+                    : Appearance.colors.colSubtext
 
                 SequentialAnimation on color {
-                    running: root.isCommandRequest && !root.commandDone && !root.commandSucceeded && !root.commandFailed
+                    running: root.isCommandRequest && !root.commandSucceeded && !root.commandFailed
                     loops: Animation.Infinite
                     ColorAnimation { from: Appearance.colors.colSubtext; to: Appearance.colors.colOnLayer2; duration: 900; easing.type: Easing.InOutSine }
                     ColorAnimation { from: Appearance.colors.colOnLayer2; to: Appearance.colors.colSubtext; duration: 900; easing.type: Easing.InOutSine }
@@ -102,13 +108,20 @@ ColumnLayout {
 
             Item { Layout.fillWidth: true }
 
-            // Expand/collapse chevron for command blocks
-            StyledText {
+            // Expand/collapse chevron for command blocks — animated rotation like ThinkBlock
+            MaterialSymbol {
                 visible: root.isCommandRequest
                 Layout.rightMargin: 8
-                font.pixelSize: Appearance.font.pixelSize.small + 2
+                text: "keyboard_arrow_down"
+                iconSize: Appearance.font.pixelSize.normal + 2
                 color: Appearance.colors.colSubtext
-                text: root.commandExpanded ? "▲" : "▼"
+                rotation: root.commandExpanded ? 180 : 0
+                Behavior on rotation {
+                    NumberAnimation {
+                        duration: Appearance.animation.elementMoveFast.duration
+                        easing.type: Easing.InOutQuad
+                    }
+                }
             }
 
             ButtonGroup {
@@ -295,19 +308,29 @@ ColumnLayout {
                         Item { Layout.fillWidth: true }
                         ButtonGroup {
                             GroupButton {
-                                contentItem: StyledText {
-                                    text: Translation.tr("Reject")
-                                    font.pixelSize: Appearance.font.pixelSize.small + 2
-                                    color: Appearance.colors.colOnLayer2
+                                contentItem: RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol { text: "close"; iconSize: 14; color: Appearance.colors.colOnLayer2 }
+                                    StyledText {
+                                        text: Translation.tr("Reject")
+                                        font.pixelSize: Appearance.font.pixelSize.small + 2
+                                        color: Appearance.colors.colOnLayer2
+                                    }
                                 }
                                 onClicked: Ai.rejectCommand(root.messageData)
                             }
                             GroupButton {
                                 toggled: true
-                                contentItem: StyledText {
-                                    text: Translation.tr("Approve")
-                                    font.pixelSize: Appearance.font.pixelSize.small + 2
-                                    color: Appearance.colors.colOnPrimary
+                                contentItem: RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    MaterialSymbol { text: "check"; iconSize: 14; color: Appearance.colors.colOnPrimary }
+                                    StyledText {
+                                        text: Translation.tr("Approve")
+                                        font.pixelSize: Appearance.font.pixelSize.small + 2
+                                        color: Appearance.colors.colOnPrimary
+                                    }
                                 }
                                 onClicked: Ai.approveCommand(root.messageData)
                             }

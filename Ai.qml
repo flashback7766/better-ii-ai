@@ -213,9 +213,23 @@ Singleton {
                 {
                     "type": "function",
                     "function": {
+                        "name": "switch_to_search_mode",
+                        "description": "Switch to web search mode to look up current information, recent events, prices, documentation, etc. Use whenever the answer might require up-to-date data.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
                         "name": "get_shell_config",
                         "description": "Get the desktop shell config file contents",
-                        "parameters": {}
+                        "parameters": {
+                            "type": "object",
+                            "properties": {}
+                        }
                     },
                 },
                 {
@@ -281,6 +295,14 @@ Singleton {
         "anthropic": {
             "functions": [
                 {
+                    "name": "switch_to_search_mode",
+                    "description": "Switch to web search mode to look up current information, recent events, prices, documentation, etc. Use whenever the answer might require up-to-date data.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                },
+                {
                     "name": "get_shell_config",
                     "description": "Get the desktop shell config file contents",
                     "input_schema": {
@@ -321,14 +343,29 @@ Singleton {
                     }
                 }
             ],
-            "search": [],
+            "search": [
+                {
+                    "name": "web_search_preview",
+                    "description": "Search the web for current information. Use for factual queries, recent events, prices, docs, etc.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                }
+            ],
             "none": [],
         }
     }
-    property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format])
+    property list<var> availableTools: Object.keys(root.tools[models[currentModelId]?.api_format] ?? root.tools["openai"])
     property var toolDescriptions: {
-        "functions": Translation.tr("Commands, edit configs, search.\nTakes an extra turn to switch to search mode if that's needed"),
-        "search": Translation.tr("Gives the model search capabilities (immediately)"),
+        "functions": Translation.tr("Shell commands, config editing, web search.\nModel picks the right tool automatically."),
+        "search": Translation.tr("Web search only (fastest for lookup tasks)"),
         "none": Translation.tr("Disable tools")
     }
 
@@ -603,6 +640,7 @@ Singleton {
                             "endpoint": "http://localhost:11434/v1/chat/completions",
                             "model": model,
                             "requires_key": false,
+                            "api_format": "openai",
                         })
                     });
 
@@ -745,7 +783,6 @@ Singleton {
                 return;
             }
             if (setPersistentState) Persistent.states.ai.model = modelId;
-            if (feedback) root.addMessage(Translation.tr("Model set to %1").arg(model.name), root.interfaceRole);
             if (model.requires_key) {
                 // If key not there show advice
                 if (root.apiKeysLoaded && (!root.apiKeys[model.key_id] || root.apiKeys[model.key_id].length === 0)) {
@@ -753,7 +790,7 @@ Singleton {
                 }
             }
         } else {
-            if (feedback) root.addMessage(Translation.tr("Invalid model. Supported: \n```\n") + modelList.join("\n```\n```\n") + "\n```", Ai.interfaceRole)
+            if (feedback) root.addMessage(Translation.tr("Invalid model. Supported:\n```\n") + modelList.join("\n") + "\n```", Ai.interfaceRole)
         }
     }
 
@@ -867,6 +904,7 @@ Singleton {
         root.tokenCount.total = -1;
         root.generationSpeed = 0;
         root.pendingFilePath = "";
+        root.sessionSummary = "";
         // Reload summaries from all history slots
         root.loadRecentChatSummaries();
     }
@@ -1166,7 +1204,8 @@ Singleton {
                 filteredMessageArray.unshift(summaryMsg);
             }
 
-            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, root.tools[model.api_format][root.currentTool], root.pendingFilePath, root.thinkingEnabled, root.thinkingLevel);
+            const toolsForFormat = root.tools[model.api_format] ?? root.tools["openai"];
+            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, toolsForFormat[root.currentTool] ?? [], root.pendingFilePath, root.thinkingEnabled, root.thinkingLevel);
             // console.log("[Ai] Request data: ", JSON.stringify(data, null, 2));
 
             let requestHeaders = {
@@ -1399,8 +1438,9 @@ Singleton {
 
     function rejectCommand(message: AiMessageData) {
         if (!message.functionPending) return;
-        message.functionPending = false; // User decided, no more "thinking"
-        addFunctionOutputMessage(message.functionName, Translation.tr("Command rejected by user"))
+        message.functionPending = false;
+        addFunctionOutputMessage(message.functionName, Translation.tr("Command rejected by user"));
+        requester.makeRequest();
     }
 
     function approveCommand(message: AiMessageData) {
@@ -1480,7 +1520,7 @@ Singleton {
             const exitLabel = exitCode === 0 ? "✓" : `✗ exit ${exitCode}`;
             const baseContent = commandExecutionProc.assistantMessage.contentBeforeCommand ?? commandExecutionProc.assistantMessage.content;
             commandExecutionProc.assistantMessage.content = baseContent + `\n\n\`\`\`command\n$ ${cmdName} ${exitLabel}\n${lastLines}\n\`\`\``;
-            collectedOutput = "";
+            commandExecutionProc.collectedOutput = "";
             requester.makeRequest();
         }
     }
@@ -1509,9 +1549,10 @@ Singleton {
 
     function handleFunctionCall(name, args: var, message: AiMessageData) {
         if (name === "switch_to_search_mode") {
-            const modelId = root.currentModelId;
-            root.currentTool = "search"
-            root.postResponseHook = () => { root.currentTool = "functions" }
+            root.currentTool = "search";
+            root.postResponseHook = () => {
+                root.currentTool = Qt.binding(function() { return Config?.options.ai.tool ?? "search"; });
+            };
             addFunctionOutputMessage(name, Translation.tr("Switched to search mode. Continue with the user's request."))
             requester.makeRequest();
         } else if (name === "web_search_preview") {
@@ -1559,13 +1600,11 @@ Singleton {
 
             // Logic: Auto-approve only if the switch is ON AND the command is NOT dangerous
             const dangerous = root.isDangerousCommand(args.command);
+            if (dangerous) {
+                root.addMessage(Translation.tr("⚠️ **Dangerous command detected** — manual approval required:\n```bash\n%1\n```").arg(args.command), root.interfaceRole);
+            }
             if (root.functionsAutoConfirm && !dangerous) {
                 root.approveCommand(message);
-            } else {
-                // Wait for manual approval
-                if (dangerous) {
-                    console.log("[AI] Dangerous command detected, requiring manual approval:", args.command);
-                }
             }
         } else {
             root.addMessage(Translation.tr("Unknown function call: %1").arg(name), root.interfaceRole);

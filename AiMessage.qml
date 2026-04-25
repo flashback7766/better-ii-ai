@@ -44,24 +44,29 @@ Rectangle {
 
     function saveMessage() {
         if (!root.editing) return;
-        // Get all Loader children (each represents a segment)
-        const segments = messageContentColumnLayout.children
-            .map(child => child.segment)
-            .filter(segment => (segment));
-
-        // Reconstruct markdown
-        const newContent = segments.map(segment => {
-            if (segment.type === "code") {
-                const lang = segment.lang ? segment.lang : "";
-                // Remove trailing newlines
-                const code = segment.content.replace(/\n+$/, "");
-                return "```" + lang + "\n" + code + "\n```";
+        let newContent = "";
+        const children = messageContentColumnLayout.children;
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            // segmentContent is present on MessageCodeBlock, MessageTextBlock, MessageThinkBlock
+            // Items without it (e.g. the loading indicator) are skipped
+            if (child["segmentContent"] === undefined) continue;
+            const content = child["segmentContent"] ?? "";
+            const lang = child["segmentLang"];        // Only MessageCodeBlock has this
+            const isCmd = child["isCommandRequest"];  // Only MessageCodeBlock has this
+            const isThink = child["completed"] !== undefined && child["segmentLang"] === undefined;
+            if (lang !== undefined) {
+                if (isCmd) continue; // Command blocks are not user-editable
+                const cleanCode = content.replace(/\n+$/, "");
+                newContent += "```" + (lang ?? "") + "\n" + cleanCode + "\n```";
+            } else if (isThink) {
+                // Think blocks: preserve as-is (not edited by user)
+                newContent += "<think>" + content + "</think>\n";
             } else {
-                return segment.content;
+                newContent += content;
             }
-        }).join("");
-
-        root.editing = false
+        }
+        root.editing = false;
         root.messageData.content = newContent;
         root.messageData.rawContent = newContent;
     }
@@ -80,6 +85,12 @@ Rectangle {
             root.saveMessage();
             event.accepted = true;
         }
+    }
+
+    ListView.onReused: {
+        root.editing = false;
+        root.renderMarkdown = true;
+        root.enableMouseSelection = false;
     }
 
     visible: messageData?.visibleToUser ?? true
@@ -274,12 +285,22 @@ Rectangle {
                     }
                     AiMessageControlButton {
                         id: deleteButton
-                        buttonIcon: "close"
+                        buttonIcon: activated ? "delete_forever" : "delete"
                         onClicked: {
-                            Ai.removeMessageById(root.modelData)
+                            if (activated) {
+                                Ai.removeMessageById(root.modelData);
+                            } else {
+                                activated = true;
+                                deleteConfirmTimer.restart();
+                            }
+                        }
+                        Timer {
+                            id: deleteConfirmTimer
+                            interval: 2000
+                            onTriggered: deleteButton.activated = false
                         }
                         StyledToolTip {
-                            text: Translation.tr("Delete")
+                            text: deleteButton.activated ? Translation.tr("Click again to confirm delete") : Translation.tr("Delete message")
                         }
                     }
                 }
@@ -351,40 +372,6 @@ Rectangle {
                         done: root.messageData?.done ?? false
                         forceDisableChunkSplitting: root.messageData?.content.includes("```") ?? true
                     } }
-                }
-            }
-        }
-
-        // Approval bar for pending functions
-        RowLayout {
-            visible: root.messageData?.functionPending ?? false
-            Layout.fillWidth: true
-            Layout.margins: 4
-            spacing: 8
-
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 32
-                buttonRadius: Appearance.rounding.small
-                colBackground: Appearance.m3colors.m3primary
-                onClicked: Ai.approveCommand(root.messageData)
-                contentItem: RowLayout {
-                    anchors.centerIn: parent; spacing: 6
-                    MaterialSymbol { text: "check"; iconSize: 18; color: Appearance.m3colors.m3onPrimary }
-                    StyledText { text: Translation.tr("Approve"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.m3colors.m3onPrimary }
-                }
-            }
-
-            RippleButton {
-                Layout.fillWidth: true
-                implicitHeight: 32
-                buttonRadius: Appearance.rounding.small
-                colBackground: Appearance.colors.colLayer3
-                onClicked: Ai.rejectCommand(root.messageData)
-                contentItem: RowLayout {
-                    anchors.centerIn: parent; spacing: 6
-                    MaterialSymbol { text: "close"; iconSize: 18; color: Appearance.m3colors.m3onSurface }
-                    StyledText { text: Translation.tr("Reject"); font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.m3colors.m3onSurface }
                 }
             }
         }

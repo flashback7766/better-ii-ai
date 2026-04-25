@@ -278,6 +278,11 @@ ApiStrategy {
     }
 
     function onRequestFinished(message) {
+        // Close any unclosed thinking block (e.g. stream cut off mid-thought)
+        if (message._thinkOpen) {
+            message.rawContent += "</think>\n";
+            message._thinkOpen = false;
+        }
         return { finished: false };
     }
 }

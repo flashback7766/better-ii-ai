@@ -78,7 +78,6 @@ ApiStrategy {
             }
         })
         if (filePath && filePath.length > 0) {
-            const trimmedFilePath = CF.FileUtils.trimFileProtocol(filePath);
             contents[contents.length - 1].parts.unshift({
                 inline_data: {
                     mime_type: fileMimeTypeSubstitutionString,

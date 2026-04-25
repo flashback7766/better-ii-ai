@@ -12,7 +12,43 @@ ApiStrategy {
             "model": model.model,
             "messages": [
                 {role: "system", content: systemPrompt},
-                ...messages.map(message => {
+                ...messages.map((message, i) => {
+                    // Tool result message — must use role "tool" with tool_call_id
+                    if (message.role === "user" && message.functionName && message.functionName.length > 0) {
+                        let toolCallId = null;
+                        if (i > 0 && messages[i - 1].functionCall && messages[i - 1].functionCall.id) {
+                            toolCallId = messages[i - 1].functionCall.id;
+                        }
+                        if (toolCallId) {
+                            return {
+                                "role": "tool",
+                                "tool_call_id": toolCallId,
+                                "content": message.functionResponse || ""
+                            };
+                        }
+                        // Fallback for local models without IDs: send as plain user text
+                        return {
+                            "role": "user",
+                            "content": `[[ Output of ${message.functionName} ]]:\n${message.functionResponse || ""}`
+                        };
+                    }
+                    // Assistant tool call message — emit tool_calls structure
+                    if (message.role === "assistant" && message.functionName && message.functionName.length > 0) {
+                        const textOnly = message.rawContent ? message.rawContent.split("\n\n[[ Function:")[0] : "";
+                        const result = {
+                            "role": "assistant",
+                            "tool_calls": [{
+                                "id": message.functionCall?.id || ("call_" + message.functionName),
+                                "type": "function",
+                                "function": {
+                                    "name": message.functionName,
+                                    "arguments": JSON.stringify(message.functionCall?.args || {})
+                                }
+                            }]
+                        };
+                        if (textOnly && textOnly.trim().length > 0) result["content"] = textOnly;
+                        return result;
+                    }
                     // Image attached via base64
                     if (message.role === "user" && message.fileBase64 && message.fileBase64.length > 0) {
                         const mediaType = message.fileMimeType || "image/png";
@@ -97,18 +133,19 @@ ApiStrategy {
     // Accumulate streamed tool call fragments
     property string _toolCallName: ""
     property string _toolCallArgs: ""
+    property string _toolCallId: ""
 
     function parseResponseLine(line, message) {
         let cleanData = line.trim();
         if (cleanData.startsWith("data:")) {
             cleanData = cleanData.slice(5).trim();
         }
-        
+
         if (!cleanData || cleanData.startsWith(":")) return {};
         if (cleanData === "[DONE]") {
             return { finished: true };
         }
-        
+
         try {
             const dataJson = JSON.parse(cleanData);
 
@@ -138,28 +175,31 @@ ApiStrategy {
             const delta = dataJson.choices?.[0]?.delta;
             const finishReason = dataJson.choices?.[0]?.finish_reason;
 
-            // Handle tool calls (OpenAI function calling)
+            // Accumulate tool call fragments (id arrives in the first delta chunk)
             if (delta?.tool_calls) {
                 for (let i = 0; i < delta.tool_calls.length; i++) {
                     const tc = delta.tool_calls[i];
+                    if (tc.id) _toolCallId = tc.id;
                     if (tc["function"]?.name) _toolCallName = tc["function"].name;
                     if (tc["function"]?.arguments) _toolCallArgs += tc["function"].arguments;
                 }
-                // If finish_reason is tool_calls, emit the function call
-                if (finishReason === "tool_calls" || finishReason === "function_call") {
-                    let args = {};
-                    try { args = JSON.parse(_toolCallArgs); } catch(e) {}
-                    const fc = { name: _toolCallName, args: args };
-                    message.functionName = _toolCallName;
-                    message.functionCall = fc;
-                    const rawEntry = "\n\n[[ Function: " + _toolCallName + "(" + _toolCallArgs + ") ]]\n";
-                    message.rawContent += rawEntry;
-                    _toolCallName = "";
-                    _toolCallArgs = "";
-                    return { functionCall: fc, finished: false };
-                }
-                return {};
             }
+
+            // Emit tool call when finish_reason arrives (may be in a separate chunk)
+            if ((finishReason === "tool_calls" || finishReason === "function_call") && _toolCallName.length > 0) {
+                let args = {};
+                try { args = JSON.parse(_toolCallArgs); } catch(e) {}
+                const fc = { name: _toolCallName, args: args, id: _toolCallId };
+                message.functionName = _toolCallName;
+                message.functionCall = fc;
+                message.rawContent += "\n\n[[ Function: " + _toolCallName + "(" + _toolCallArgs + ") ]]\n";
+                _toolCallName = "";
+                _toolCallArgs = "";
+                _toolCallId = "";
+                return { functionCall: fc, finished: false };
+            }
+
+            if (delta?.tool_calls) return {};  // Still accumulating tool call fragments
 
             let newContent = "";
             const responseContent = delta?.content || dataJson.message?.content;
@@ -212,6 +252,19 @@ ApiStrategy {
     }
     
     function onRequestFinished(message) {
+        // Emit any tool call that was accumulating when the stream ended
+        if (_toolCallName.length > 0) {
+            let args = {};
+            try { args = JSON.parse(_toolCallArgs); } catch(e) {}
+            const fc = { name: _toolCallName, args: args, id: _toolCallId };
+            message.functionName = _toolCallName;
+            message.functionCall = fc;
+            message.rawContent += "\n\n[[ Function: " + _toolCallName + "(" + _toolCallArgs + ") ]]\n";
+            _toolCallName = "";
+            _toolCallArgs = "";
+            _toolCallId = "";
+            return { functionCall: fc, finished: false };
+        }
         return {};
     }
     
@@ -219,6 +272,7 @@ ApiStrategy {
         isReasoning = false;
         _toolCallName = "";
         _toolCallArgs = "";
+        _toolCallId = "";
     }
 
     function finalizeScriptContent(content) {
