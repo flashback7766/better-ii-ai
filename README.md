@@ -11,7 +11,7 @@ Better-ii-ai is a powerful, multi-provider AI chat extension for the [dots-hyprl
 
 | Feature | Description |
 |---|---|
-| **Multi-Provider** | Support for **Google Gemini**, **Anthropic Claude**, **OpenAI GPT**, and any OpenAI-compatible API. |
+| **Multi-Provider** | Support for **Google Gemini**, **Anthropic Claude**, **OpenAI GPT** (actually this model has worst support cause im broke), and any OpenAI-compatible API. |
 | **Local Models** | Automatic detection of **Ollama** models; support for **LM Studio** and **vLLM** via custom endpoints. |
 | **Tool Calling** | Native support for **Web Search**, running **Bash commands**, and editing **Shell configuration** files. |
 | **Extended Thinking** | Full support for **Anthropic's Thinking Mode** (budget tokens) and **Gemini's Thinking Levels** (Low/Med/High). |
