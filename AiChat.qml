@@ -357,7 +357,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 240
+        width: 480
         readonly property real maxPopupHeight: 300
         readonly property real naturalHeight: modelPickerColumn.implicitHeight + 16
         implicitHeight: Math.min(naturalHeight, maxPopupHeight)
@@ -423,7 +423,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 propagateComposedEvents: true
                 onWheel: (wheel) => {
                     scrollBehavior.enabled = true;
-                    const step = wheel.angleDelta.y * 0.8;
+                    const step = wheel.angleDelta.y * 1.2;
                     modelPickerFlickable.contentY = Math.max(0,
                         Math.min(modelPickerFlickable.contentHeight - modelPickerFlickable.height,
                             modelPickerFlickable.contentY - step));
@@ -443,15 +443,16 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             ColumnLayout {
                 id: modelPickerColumn
                 width: modelPickerFlickable.width
-                spacing: 2
+                spacing: 4
 
                 Item { Layout.fillWidth: true; implicitHeight: 4 }
                 StyledText {
                     Layout.leftMargin: 12
+                    Layout.topMargin: 2
                     font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                    font.weight: Font.Medium
+                    font.weight: Font.SemiBold
                     color: Appearance.m3colors.m3primary
-                    text: Translation.tr("Choose model")
+                    text: Translation.tr("Select Model")
                 }
 
                 // Custom models section (only shown when custom models exist)
@@ -475,11 +476,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             required property var modelData
                             property bool pendingDelete: false
                             Layout.fillWidth: true
-                            implicitHeight: _row.implicitHeight + 8
-                            buttonRadius: Appearance.rounding.small
+                            implicitHeight: 52
+                            buttonRadius: Appearance.rounding.normal
                             toggled: Ai.currentModelId === modelData
-                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.35) : "transparent"
-                            colBackgroundHover: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.5) : Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
+                            colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                             onClicked: {
                                 if (pendingDelete) { pendingDelete = false; return; }
                                 Ai.setModel(modelData, false); modelPickerPopup.close();
@@ -490,51 +491,69 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 onTriggered: parent.pendingDelete = false
                             }
                             contentItem: RowLayout {
-                                id: _row
-                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
-                                spacing: 10
-                                CustomIcon {
-                                    visible: Ai.models[modelData]?.icon?.length > 0
-                                    width: 18; height: 18
-                                    source: Ai.models[modelData]?.icon ?? ""; colorize: true
-                                    color: parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
-                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+                                spacing: 12
+                                Rectangle {
+                                    width: 32; height: 32; radius: 8
+                                    color: Qt.alpha(Appearance.colors.colSubtext, 0.1)
+                                    CustomIcon {
+                                        anchors.centerIn: parent
+                                        visible: Ai.models[modelData]?.icon?.length > 0
+                                        width: 20; height: 20
+                                        source: Ai.models[modelData]?.icon ?? ""; colorize: true
+                                        color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                    MaterialSymbol {
+                                        anchors.centerIn: parent
+                                        visible: !Ai.models[modelData]?.icon
+                                        text: "smart_toy"
+                                        iconSize: 20
+                                        color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.colors.colSubtext
+                                    }
                                 }
                                 ColumnLayout {
-                                    Layout.fillWidth: true; spacing: 1
-                                    StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
-                                    StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
-                                }
-                                MaterialSymbol {
-                                    visible: parent.parent.toggled && !parent.parent.pendingDelete
-                                    text: "check"; iconSize: 16; color: Appearance.m3colors.m3primary
-                                }
-                                // Two-step delete: first click arms it, second click confirms
-                                StyledText {
-                                    visible: parent.parent.pendingDelete
-                                    font.pixelSize: Appearance.font.pixelSize.smaller
-                                    color: Appearance.m3colors.m3error
-                                    text: Translation.tr("Remove?")
-                                    MouseArea {
-                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                        onClicked: { Ai.removeModel(modelData); }
+                                    Layout.fillWidth: true; spacing: 0
+                                    StyledText { 
+                                        Layout.fillWidth: true; 
+                                        font.pixelSize: Appearance.font.pixelSize.small + 2; 
+                                        font.weight: Font.SemiBold; 
+                                        color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface; 
+                                        text: Ai.models[modelData]?.name ?? modelData; 
+                                        elide: Text.ElideRight 
+                                    }
+                                    StyledText { 
+                                        Layout.fillWidth: true; 
+                                        font.pixelSize: Appearance.font.pixelSize.smaller + 1; 
+                                        color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3primary, 0.7) : Appearance.colors.colSubtext; 
+                                        text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; 
+                                        elide: Text.ElideRight 
                                     }
                                 }
                                 MaterialSymbol {
-                                    text: parent.parent.pendingDelete ? "delete_forever" : "close"
-                                    iconSize: Appearance.font.pixelSize.small
-                                    color: parent.parent.pendingDelete ? Appearance.m3colors.m3error : Appearance.colors.colSubtext
-                                    Behavior on color { ColorAnimation { duration: 150 } }
-                                    MouseArea {
-                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (parent.parent.parent.pendingDelete) {
-                                                Ai.removeModel(modelData);
-                                            } else {
-                                                parent.parent.parent.pendingDelete = true;
-                                                deleteResetTimer.restart();
-                                            }
-                                        }
+                                    visible: parent.parent.toggled && !parent.parent.pendingDelete
+                                    text: "check_circle"; iconSize: 18; color: Appearance.m3colors.m3primary
+                                }
+                                // Delete controls
+                                RowLayout {
+                                    visible: parent.parent.pendingDelete
+                                    spacing: 8
+                                    StyledText {
+                                        font.pixelSize: Appearance.font.pixelSize.smaller
+                                        color: Appearance.m3colors.m3error
+                                        text: Translation.tr("Remove?")
+                                    }
+                                    MaterialSymbol {
+                                        text: "delete_forever"; iconSize: 20; color: Appearance.m3colors.m3error
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Ai.removeModel(modelData) }
+                                    }
+                                }
+                                MaterialSymbol {
+                                    visible: !parent.parent.pendingDelete && !parent.parent.toggled
+                                    text: "close"; iconSize: 18; color: Appearance.colors.colSubtext; opacity: 0.5
+                                    MouseArea { 
+                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor; 
+                                        onClicked: { parent.parent.parent.pendingDelete = true; deleteResetTimer.restart(); } 
                                     }
                                 }
                             }
@@ -568,31 +587,55 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     delegate: RippleButton {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: _row2.implicitHeight + 8
-                        buttonRadius: Appearance.rounding.small
+                        implicitHeight: 52
+                        buttonRadius: Appearance.rounding.normal
                         toggled: Ai.currentModelId === modelData
-                        colBackground: toggled ? Qt.alpha("#ffffff", 0.12) : "transparent"
-                        colBackgroundHover: toggled ? Qt.alpha("#ffffff", 0.18) : Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
+                        colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                         onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                         contentItem: RowLayout {
-                            id: _row2
-                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 10
-                            spacing: 10
-                            CustomIcon {
-                                visible: Ai.models[modelData]?.icon?.length > 0
-                                width: 18; height: 18
-                                source: Ai.models[modelData]?.icon ?? ""; colorize: true
-                                color: parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
-                                Behavior on color { ColorAnimation { duration: 150 } }
+                            anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+                            spacing: 12
+                            Rectangle {
+                                width: 32; height: 32; radius: 8
+                                color: Qt.alpha(Appearance.colors.colSubtext, 0.1)
+                                CustomIcon {
+                                    anchors.centerIn: parent
+                                    visible: Ai.models[modelData]?.icon?.length > 0
+                                    width: 20; height: 20
+                                    source: Ai.models[modelData]?.icon ?? ""; colorize: true
+                                    color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                }
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    visible: !Ai.models[modelData]?.icon
+                                    text: Ai.guessModelLogo(modelData)
+                                    iconSize: 20
+                                    color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.colors.colSubtext
+                                }
                             }
                             ColumnLayout {
-                                Layout.fillWidth: true; spacing: 1
-                                StyledText { Layout.fillWidth: true; font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; color: Appearance.m3colors.m3onSurface; text: Ai.models[modelData]?.name ?? modelData; elide: Text.ElideRight }
-                                StyledText { Layout.fillWidth: true; visible: text.length > 0; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colSubtext; text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; elide: Text.ElideRight }
+                                Layout.fillWidth: true; spacing: 0
+                                StyledText { 
+                                    Layout.fillWidth: true; 
+                                    font.pixelSize: Appearance.font.pixelSize.small + 2; 
+                                    font.weight: Font.SemiBold; 
+                                    color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface; 
+                                    text: Ai.models[modelData]?.name ?? modelData; 
+                                    elide: Text.ElideRight 
+                                }
+                                StyledText { 
+                                    Layout.fillWidth: true; 
+                                    font.pixelSize: Appearance.font.pixelSize.smaller + 1; 
+                                    color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3primary, 0.7) : Appearance.colors.colSubtext; 
+                                    text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; 
+                                    elide: Text.ElideRight 
+                                }
                             }
                             MaterialSymbol {
                                 visible: parent.parent.toggled
-                                text: "check"; iconSize: 16; color: Appearance.m3colors.m3primary
+                                text: "check_circle"; iconSize: 18; color: Appearance.m3colors.m3primary
                             }
                         }
                     }
@@ -651,7 +694,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 240
+        width: 320
         implicitHeight: functionsPopupColumn.implicitHeight + 16
         clip: true
         radius: Appearance.rounding.large ?? 16
@@ -671,17 +714,17 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         ColumnLayout {
             id: functionsPopupColumn
             anchors.fill: parent
-            anchors.margins: 8
-            spacing: 4
+            anchors.margins: 12
+            spacing: 8
 
             // --- Tools section ---
-            Item { implicitHeight: 2 }
             StyledText {
                 Layout.leftMargin: 4
+                Layout.topMargin: 2
                 font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                font.weight: Font.Medium
+                font.weight: Font.SemiBold
                 color: Appearance.m3colors.m3primary
-                text: Translation.tr("Tools")
+                text: Translation.tr("Tool Mode")
             }
 
             Repeater {
@@ -689,31 +732,30 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 delegate: RippleButton {
                     required property var modelData
                     Layout.fillWidth: true
-                    implicitHeight: _toolRow.implicitHeight + 10
-                    buttonRadius: Appearance.rounding.small
+                    implicitHeight: 52
+                    buttonRadius: Appearance.rounding.normal
                     toggled: Ai.currentTool === modelData
-                    colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.7) : "transparent"
-                    colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                    colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
+                    colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                     onClicked: {
                         Ai.setTool(modelData);
                         functionsPopup.close();
                     }
                     contentItem: RowLayout {
-                        id: _toolRow
-                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 8
-                        spacing: 10
+                        anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
+                        spacing: 12
                         // Colored icon pill
                         Rectangle {
-                            width: 30; height: 30; radius: 8
+                            width: 34; height: 34; radius: 10
                             color: {
-                                if (modelData === "functions") return Qt.alpha(Appearance.m3colors.m3primary, 0.15);
-                                if (modelData === "search") return Qt.alpha("#34A853", 0.15);
-                                return Qt.alpha(Appearance.colors.colSubtext, 0.1);
+                                if (modelData === "functions") return Qt.alpha(Appearance.m3colors.m3primary, 0.12);
+                                if (modelData === "search") return Qt.alpha("#34A853", 0.12);
+                                return Qt.alpha(Appearance.colors.colSubtext, 0.08);
                             }
                             MaterialSymbol {
                                 anchors.centerIn: parent
                                 text: modelData === "functions" ? "build" : modelData === "search" ? "search" : "block"
-                                iconSize: 16
+                                iconSize: 18
                                 color: {
                                     if (modelData === "functions") return Appearance.m3colors.m3primary;
                                     if (modelData === "search") return "#34A853";
@@ -722,29 +764,29 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             }
                         }
                         ColumnLayout {
-                            Layout.fillWidth: true; spacing: 1
+                            Layout.fillWidth: true; spacing: 0
                             StyledText {
                                 Layout.fillWidth: true
                                 font.pixelSize: Appearance.font.pixelSize.small + 2
-                                font.weight: Font.Medium
-                                color: parent.parent.parent.toggled ? Appearance.m3colors.m3onPrimaryContainer : Appearance.m3colors.m3onSurface
-                                text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
+                                font.weight: Font.SemiBold
+                                color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
+                                text: modelData === "functions" ? Translation.tr("All Tools") : 
+                                      modelData === "search" ? Translation.tr("Search Only") : 
+                                      Translation.tr("No Tools")
                                 elide: Text.ElideRight
-                                Behavior on color { ColorAnimation { duration: 150 } }
                             }
                             StyledText {
                                 Layout.fillWidth: true
-                                visible: text.length > 0
-                                font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                                color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3onPrimaryContainer, 0.7) : Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.smaller + 1
+                                color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3primary, 0.75) : Appearance.colors.colSubtext
                                 text: (Ai.toolDescriptions[modelData] ?? "").split("\n")[0] ?? ""
                                 elide: Text.ElideRight
-                                Behavior on color { ColorAnimation { duration: 150 } }
+                                opacity: 0.8
                             }
                         }
                         MaterialSymbol {
                             visible: parent.parent.toggled
-                            text: "check"; iconSize: 16; color: Appearance.m3colors.m3primary
+                            text: "check_circle"; iconSize: 18; color: Appearance.m3colors.m3primary
                         }
                     }
                 }
@@ -773,44 +815,52 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 ColumnLayout {
                     visible: Ai.currentThinkingStyle === "anthropic"
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: 4
 
                     StyledText {
-                        Layout.leftMargin: 8
+                        Layout.leftMargin: 6
                         font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                        color: Appearance.colors.colSubtext
-                        text: Translation.tr("Thinking")
+                        font.weight: Font.SemiBold
+                        color: Appearance.m3colors.m3primary
+                        text: Translation.tr("Reasoning Mode")
                     }
-                    RowLayout {
-                        Layout.fillWidth: true; Layout.leftMargin: 4; Layout.rightMargin: 4; spacing: 3
-                        Repeater {
-                            model: [
-                                { label: "Off",    l: 0, tip: Translation.tr("No extended thinking") },
-                                { label: "Normal", l: 1, tip: Translation.tr("Extended thinking\n~8k token budget") },
-                                { label: "Max",    l: 2, tip: Translation.tr("Maximum extended thinking\n~32k token budget") }
-                            ]
-                            delegate: RippleButton {
-                                Layout.fillWidth: true; implicitHeight: 22
-                                buttonRadius: Appearance.rounding.small
-                                property bool isActive: Ai.thinkingLevel === modelData.l
-                                colBackground: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2
-                                colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2Hover
-                                onClicked: {
-                                    Ai.thinkingLevel = modelData.l;
-                                    Ai.thinkingEnabled = modelData.l > 0;
-                                    Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
-                                    Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
-                                }
-                                contentItem: StyledText {
-                                    anchors.centerIn: parent
-                                    font.pixelSize: 9
-                                    color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.m3colors.m3onSurface
-                                    text: modelData.label
-                                }
-                                StyledToolTip {
-                                    text: modelData.tip
-                                    extraVisibleCondition: false
-                                    alternativeVisibleCondition: parent.hovered
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 38
+                        radius: Appearance.rounding.normal
+                        color: Appearance.colors.colLayer2
+                        border.width: 1
+                        border.color: Appearance.colors.colOutlineVariant
+
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 4; spacing: 4
+                            Repeater {
+                                model: [
+                                    { label: Translation.tr("Off"),    l: 0, tip: Translation.tr("No extended thinking") },
+                                    { label: Translation.tr("Normal"), l: 1, tip: Translation.tr("Extended thinking\n~8k token budget") },
+                                    { label: Translation.tr("Max"),    l: 2, tip: Translation.tr("Maximum extended thinking\n~32k token budget") }
+                                ]
+                                delegate: RippleButton {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    buttonRadius: Appearance.rounding.small
+                                    property bool isActive: Ai.thinkingLevel === modelData.l
+                                    colBackground: isActive ? Appearance.m3colors.m3primary : "transparent"
+                                    colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Qt.alpha(Appearance.colors.colLayer2Hover, 0.5)
+                                    onClicked: {
+                                        Ai.thinkingLevel = modelData.l;
+                                        Ai.thinkingEnabled = modelData.l > 0;
+                                        Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
+                                        Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
+                                    }
+                                    contentItem: StyledText {
+                                        anchors.centerIn: parent
+                                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                                        font.weight: parent.isActive ? Font.SemiBold : Font.Normal
+                                        color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
+                                        text: modelData.label
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                    StyledToolTip { text: modelData.tip; extraVisibleCondition: false; alternativeVisibleCondition: parent.hovered }
                                 }
                             }
                         }
@@ -821,43 +871,51 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 ColumnLayout {
                     visible: Ai.currentThinkingStyle === "gemini"
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: 4
                     StyledText {
-                        Layout.leftMargin: 8
+                        Layout.leftMargin: 6
                         font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                        color: Appearance.colors.colSubtext
-                        text: Translation.tr("Thinking Level")
+                        font.weight: Font.SemiBold
+                        color: Appearance.m3colors.m3primary
+                        text: Translation.tr("Reasoning Level")
                     }
-                    RowLayout {
-                        Layout.fillWidth: true; Layout.leftMargin: 4; Layout.rightMargin: 4; spacing: 3
-                        Repeater {
-                            model: [
-                                {label:"Off",  l:0, tip: Translation.tr("No extended thinking")},
-                                {label:"Low",  l:1, tip: Translation.tr("Low thinking budget")},
-                                {label:"Med",  l:2, tip: Translation.tr("Medium thinking budget")},
-                                {label:"High", l:3, tip: Translation.tr("Maximum thinking budget")}
-                            ]
-                            delegate: RippleButton {
-                                Layout.fillWidth: true; implicitHeight: 22
-                                buttonRadius: Appearance.rounding.small
-                                property bool isActive: Ai.thinkingLevel === modelData.l
-                                colBackground: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2
-                                colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Appearance.colors.colLayer2Hover
-                                onClicked: {
-                                    Ai.thinkingLevel = modelData.l; Ai.thinkingEnabled = modelData.l > 0;
-                                    Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
-                                    Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
-                                }
-                                contentItem: StyledText {
-                                    anchors.centerIn: parent
-                                    font.pixelSize: 9
-                                    color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.m3colors.m3onSurface
-                                    text: modelData.label
-                                }
-                                StyledToolTip {
-                                    text: modelData.tip
-                                    extraVisibleCondition: false
-                                    alternativeVisibleCondition: parent.hovered
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 38
+                        radius: Appearance.rounding.normal
+                        color: Appearance.colors.colLayer2
+                        border.width: 1
+                        border.color: Appearance.colors.colOutlineVariant
+
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 4; spacing: 4
+                            Repeater {
+                                model: [
+                                    {label: Translation.tr("Off"),  l:0, tip: Translation.tr("No extended thinking")},
+                                    {label: Translation.tr("Low"),  l:1, tip: Translation.tr("Low thinking budget")},
+                                    {label: Translation.tr("Med"),  l:2, tip: Translation.tr("Medium thinking budget")},
+                                    {label: Translation.tr("High"), l:3, tip: Translation.tr("Maximum thinking budget")}
+                                ]
+                                delegate: RippleButton {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    buttonRadius: Appearance.rounding.small
+                                    property bool isActive: Ai.thinkingLevel === modelData.l
+                                    colBackground: isActive ? Appearance.m3colors.m3primary : "transparent"
+                                    colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Qt.alpha(Appearance.colors.colLayer2Hover, 0.5)
+                                    onClicked: {
+                                        Ai.thinkingLevel = modelData.l; Ai.thinkingEnabled = modelData.l > 0;
+                                        Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
+                                        Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
+                                    }
+                                    contentItem: StyledText {
+                                        anchors.centerIn: parent
+                                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                                        font.weight: parent.isActive ? Font.SemiBold : Font.Normal
+                                        color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
+                                        text: modelData.label
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                    StyledToolTip { text: modelData.tip; extraVisibleCondition: false; alternativeVisibleCondition: parent.hovered }
                                 }
                             }
                         }
@@ -873,7 +931,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
 
             RowLayout {
-                Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 12; Layout.bottomMargin: 6
+                Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 12
                 spacing: 12
 
                 ColumnLayout {
@@ -890,7 +948,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     }
                 }
 
-                // Global Settings Toggle (Matching Design)
                 Rectangle {
                     width: 44; height: 24; radius: 12
                     color: Ai.functionsAutoConfirm ? Appearance.m3colors.m3primary : Appearance.colors.colLayer1
@@ -911,6 +968,49 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         onClicked: {
                             Ai.functionsAutoConfirm = !Ai.functionsAutoConfirm;
                             Ai.savePersistentState("functionsAutoConfirm", Ai.functionsAutoConfirm);
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 12; Layout.bottomMargin: 6
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true; spacing: 0
+                    StyledText {
+                        font.pixelSize: Appearance.font.pixelSize.small + 2
+                        color: Appearance.m3colors.m3onSurface
+                        text: Translation.tr("Prompt Caching")
+                    }
+                    StyledText {
+                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                        color: Appearance.colors.colSubtext
+                        text: Translation.tr("Save credits by reusing context (Claude)")
+                    }
+                }
+
+                Rectangle {
+                    width: 44; height: 24; radius: 12
+                    color: Ai.promptCaching ? Appearance.m3colors.m3primary : Appearance.colors.colLayer1
+                    border.width: 1
+                    border.color: Ai.promptCaching ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
+                    Behavior on color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
+
+                    Rectangle {
+                        width: 18; height: 18; radius: 9
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: Ai.promptCaching ? parent.width - width - 3 : 3
+                        color: Ai.promptCaching ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
+                        Behavior on x { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
+                        Behavior on color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
+                    }
+                    MouseArea {
+                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            Ai.promptCaching = !Ai.promptCaching;
+                            Ai.savePersistentState("promptCaching", Ai.promptCaching);
                         }
                     }
                 }
@@ -1014,70 +1114,84 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     top: parent.top
                     topMargin: 4
                 }
-                implicitWidth: statusRowLayout.implicitWidth + 10 * 2
-                implicitHeight: Math.max(statusRowLayout.implicitHeight, 38)
+                implicitWidth: statusColumnLayout.implicitWidth + 10 * 2
+                implicitHeight: Math.max(statusColumnLayout.implicitHeight + 8, 38)
                 radius: Appearance.rounding.normal - root.padding
                 color: messageListView.atYBeginning ? Appearance.colors.colLayer2 : Appearance.colors.colLayer2Base
                 Behavior on color {
                     animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
                 }
-                RowLayout {
-                    id: statusRowLayout
+                ColumnLayout {
+                    id: statusColumnLayout
                     anchors.centerIn: parent
-                    spacing: 10
+                    spacing: 4
 
-                    StatusItem {
-                        icon: Ai.currentModelHasApiKey ? "key" : "key_off"
-                        statusText: ""
-                        description: Ai.currentModelHasApiKey ? Translation.tr("API key is set\nChange with /key YOUR_API_KEY") : Translation.tr("No API key\nSet it with /key YOUR_API_KEY")
+                    RowLayout {
+                        id: statusBarRow1
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 10
+
+                        StatusItem {
+                            icon: Ai.currentModelHasApiKey ? "key" : "key_off"
+                            statusText: ""
+                            description: Ai.currentModelHasApiKey ? Translation.tr("API key is set\nChange with /key YOUR_API_KEY") : Translation.tr("No API key\nSet it with /key YOUR_API_KEY")
+                        }
+                        StatusSeparator {}
+                        StatusItem {
+                            icon: "device_thermostat"
+                            statusText: Ai.temperature.toFixed(1)
+                            description: Translation.tr("Temperature\nChange with /temp VALUE")
+                        }
+                        StatusSeparator {
+                            visible: Ai.tokenCount.total > 0
+                        }
+                        StatusItem {
+                            visible: Ai.tokenCount.total > 0
+                            icon: "token"
+                            statusText: Ai.tokenCount.total
+                            description: Translation.tr("Tokens used in last request\nInput: %1 (%2 cached)\nOutput: %3").arg(Ai.tokenCount.input).arg(Ai.tokenCount.cacheRead).arg(Ai.tokenCount.output)
+                        }
                     }
-                    StatusSeparator {}
-                    StatusItem {
-                        icon: "device_thermostat"
-                        statusText: Ai.temperature.toFixed(1)
-                        description: Translation.tr("Temperature\nChange with /temp VALUE")
-                    }
-                    StatusSeparator {
-                        visible: Ai.tokenCount.total > 0
-                    }
-                    StatusItem {
-                        visible: Ai.tokenCount.total > 0
-                        icon: "token"
-                        statusText: Ai.tokenCount.total
-                        description: Translation.tr("Tokens used in last request\nInput: %1\nOutput: %2").arg(Ai.tokenCount.input).arg(Ai.tokenCount.output)
-                    }
-                    StatusSeparator {
-                        visible: Ai.generationSpeed > 0
-                    }
-                    StatusItem {
-                        visible: Ai.generationSpeed > 0
-                        icon: "speed"
-                        statusText: Ai.generationSpeed.toFixed(1)
-                        description: Translation.tr("Generation speed (tokens/sec)")
-                    }
-                    StatusItem {
-                        visible: Ai.sessionCost > 0.0001
-                        icon: "payments"
-                        statusText: "$" + Ai.sessionCost.toFixed(4)
-                        description: Translation.tr("Estimated session cost (accumulated)")
-                    }
-                    StatusSeparator {
-                        visible: Ai.sessionSummary.length > 0
-                    }
-                    StatusItem {
-                        visible: Ai.sessionSummary.length > 0
-                        icon: "history_edu"
-                        statusText: Translation.tr("Condensed")
-                        description: Translation.tr("History has been semantically condensed to save space.\n\nSummary:\n%1").arg(Ai.sessionSummary)
-                    }
-                    StatusSeparator {
-                        visible: Ai.functionsAutoConfirm
-                    }
-                    StatusItem {
-                        visible: Ai.functionsAutoConfirm
-                        icon: "bolt"
-                        statusText: Translation.tr("Auto")
-                        description: Translation.tr("⚠️ Auto-confirm is ON\nShell commands run without approval.\nDisable in the ⚙ Functions menu.")
+
+                    RowLayout {
+                        id: statusBarRow2
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 10
+                        visible: Ai.generationSpeed > 0 || Ai.sessionCost > 0.0001 || Ai.sessionSummary.length > 0 || Ai.functionsAutoConfirm
+
+                        StatusItem {
+                            visible: Ai.generationSpeed > 0
+                            icon: "speed"
+                            statusText: Ai.generationSpeed.toFixed(1)
+                            description: Translation.tr("Generation speed (tokens/sec)")
+                        }
+                        StatusSeparator {
+                            visible: Ai.generationSpeed > 0 && (Ai.sessionCost > 0.0001 || Ai.sessionSummary.length > 0 || Ai.functionsAutoConfirm)
+                        }
+                        StatusItem {
+                            visible: Ai.sessionCost > 0.0001
+                            icon: "payments"
+                            statusText: "$" + Ai.sessionCost.toFixed(4)
+                            description: Translation.tr("Estimated session cost (accumulated)")
+                        }
+                        StatusSeparator {
+                            visible: Ai.sessionCost > 0.0001 && (Ai.sessionSummary.length > 0 || Ai.functionsAutoConfirm)
+                        }
+                        StatusItem {
+                            visible: Ai.sessionSummary.length > 0
+                            icon: "history_edu"
+                            statusText: Translation.tr("Condensed")
+                            description: Translation.tr("History has been semantically condensed to save space.\n\nSummary:\n%1").arg(Ai.sessionSummary)
+                        }
+                        StatusSeparator {
+                            visible: Ai.sessionSummary.length > 0 && Ai.functionsAutoConfirm
+                        }
+                        StatusItem {
+                            visible: Ai.functionsAutoConfirm
+                            icon: "bolt"
+                            statusText: Translation.tr("Auto")
+                            description: Translation.tr("⚠️ Auto-confirm is ON\nShell commands run without approval.\nDisable in the ⚙ Functions menu.")
+                        }
                     }
                 }
             }

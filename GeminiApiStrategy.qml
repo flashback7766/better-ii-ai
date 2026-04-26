@@ -87,7 +87,7 @@ ApiStrategy {
         }
         // Gemini 3 uses thinking_level (string), not thinking_budget (number)
         // Levels: minimal=off-ish, low, medium, high
-        const geminiThinkingLevels = ["minimal", "low", "medium", "high"];
+        const geminiThinkingLevels = ["MINIMAL", "LOW", "MEDIUM", "HIGH"];
         const thinkingLevelStr = (thinkingEnabled && thinkingLevel > 0)
             ? geminiThinkingLevels[Math.min(thinkingLevel, 3)]
             : null;
@@ -262,7 +262,8 @@ ApiStrategy {
                     tokenUsage: {
                         input: dataJson.usageMetadata.promptTokenCount ?? -1,
                         output: dataJson.usageMetadata.candidatesTokenCount ?? -1,
-                        total: dataJson.usageMetadata.totalTokenCount ?? -1
+                        total: dataJson.usageMetadata.totalTokenCount ?? -1,
+                        cacheRead: dataJson.usageMetadata.cachedContentTokenCount ?? 0
                     },
                     finished: finished
                 };

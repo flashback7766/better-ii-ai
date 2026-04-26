@@ -4,6 +4,8 @@ ApiStrategy {
     id: root
 
     property int inputTokens: 0
+    property int cacheReadTokens: 0
+    property int cacheWriteTokens: 0
     property string _toolCallName: ""
     property string _toolCallArgs: ""
     property string _toolCallId: ""
@@ -11,6 +13,8 @@ ApiStrategy {
 
     function reset() {
         inputTokens = 0;
+        cacheReadTokens = 0;
+        cacheWriteTokens = 0;
         _toolCallName = "";
         _toolCallArgs = "";
         _toolCallId = "";
@@ -22,7 +26,7 @@ ApiStrategy {
     }
 
     function buildAuthorizationHeader(apiKeyEnvVarName) {
-        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01'`
+        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: prompt-caching-2024-07-31,output-thinking-2025-02-19'`
     }
 
     function buildRequestData(model, messages, systemPrompt, temperature, tools, pendingFilePath, thinkingEnabled, thinkingLevel) {
@@ -105,6 +109,15 @@ ApiStrategy {
             }
         }
 
+        if (Ai.promptCaching && anthropicMessages.length >= 4) {
+             // Cache the 4th message from the end (approx) to keep a large chunk cached
+             const cacheIndex = anthropicMessages.length - 4;
+             const msg = anthropicMessages[cacheIndex];
+             if (Array.isArray(msg.content) && msg.content.length > 0) {
+                 msg.content[msg.content.length - 1].cache_control = {"type": "ephemeral"};
+             }
+        }
+
         const budgets = [0, 8000, 32000];
         const thinkingBudget = (thinkingEnabled && thinkingLevel > 0) ? budgets[Math.min(thinkingLevel, 2)] : 0;
 
@@ -117,7 +130,12 @@ ApiStrategy {
         };
 
         if (tools && tools.length > 0) {
-            requestData["tools"] = tools;
+            const cachedTools = JSON.parse(JSON.stringify(tools));
+            if (Ai.promptCaching) {
+                 // Add cache_control to the last tool to cache the whole toolset
+                 cachedTools[cachedTools.length - 1].cache_control = {"type": "ephemeral"};
+            }
+            requestData["tools"] = cachedTools;
         }
 
         if (thinkingBudget > 0) {
@@ -128,7 +146,15 @@ ApiStrategy {
         }
 
         if (systemPrompt && systemPrompt.length > 0) {
-            requestData["system"] = systemPrompt;
+            if (Ai.promptCaching) {
+                requestData["system"] = [{
+                    "type": "text",
+                    "text": systemPrompt,
+                    "cache_control": {"type": "ephemeral"}
+                }];
+            } else {
+                requestData["system"] = systemPrompt;
+            }
         }
 
         return requestData;
@@ -200,6 +226,8 @@ ApiStrategy {
 
         if (json.type === "message_start" && json.message?.usage) {
             root.inputTokens = json.message.usage.input_tokens ?? 0;
+            root.cacheReadTokens = json.message.usage.cache_read_input_tokens ?? 0;
+            root.cacheWriteTokens = json.message.usage.cache_creation_input_tokens ?? 0;
         }
 
         if (json.type === "content_block_start" && json.content_block?.type === "tool_use") {
@@ -266,7 +294,9 @@ ApiStrategy {
                 tokenUsage: {
                     input: root.inputTokens,
                     output: outputTokens,
-                    total: root.inputTokens + outputTokens
+                    total: root.inputTokens + outputTokens,
+                    cacheRead: root.cacheReadTokens,
+                    cacheWrite: root.cacheWriteTokens
                 }
             };
         }

@@ -1,6 +1,9 @@
 # Better-ii-ai — Advanced AI Sidebar for Quickshell
 
 Better-ii-ai is a powerful, multi-provider AI chat extension for the [dots-hyprland](https://github.com/end-4/dots-hyprland) Quickshell configuration. It provides a seamless interface for interacting with various LLMs (Google Gemini, Anthropic Claude, OpenAI GPT, and local Ollama) directly from your desktop sidebar.
+    
+> [!TIP]
+> **Personal Recommendation**: Use **Google Gemini** models (Flash/Pro) whenever possible. They are currently the most stable, cost-effective, and feature-rich options in this suite. Claude models can sometimes experience API issues or higher latency.
 
 ---
 

@@ -86,6 +86,7 @@ Singleton {
     property bool thinkingEnabled: Persistent.states?.ai?.thinkingEnabled ?? false
     // Anthropic: used as budget_tokens. Gemini: level 0-3 (off/low/med, max)
     property int thinkingLevel: Persistent.states?.ai?.thinkingLevel ?? 0
+    property bool promptCaching: Persistent.states?.ai?.promptCaching ?? true
     property bool functionsAutoConfirm: Persistent.states?.ai?.functionsAutoConfirm ?? false
     readonly property var geminiThinkingLabels: ["Off", "Low", "Med", "High"]
     function currentModelThinkingStyle() {
@@ -97,6 +98,8 @@ Singleton {
         property int input: -1
         property int output: -1
         property int total: -1
+        property int cacheRead: 0
+        property int cacheWrite: 0
     }
 
     // Generation speed & cost tracking
@@ -126,10 +129,12 @@ Singleton {
         "claude-opus-4-7": "anthropic",
     })
 
-    function calculateCost(modelId, inputTokens, outputTokens) {
+    function calculateCost(modelId, inputTokens, outputTokens, cacheReadTokens = 0) {
         const pricing = root.modelPricing[modelId];
         if (!pricing) return 0;
-        return (inputTokens * pricing[0] + outputTokens * pricing[1]) / 1000000;
+        // Prompt caching read is usually 10% of base price
+        const effectiveInput = (inputTokens - cacheReadTokens) + (cacheReadTokens * 0.1);
+        return (effectiveInput * pricing[0] + outputTokens * pricing[1]) / 1000000;
     }
 
     function idForMessage(message) {
@@ -1165,7 +1170,7 @@ Singleton {
             }
             // Calculate session cost
             if (root.tokenCount.input > 0) {
-                root.sessionCost += root.calculateCost(root.currentModelId, root.tokenCount.input, root.tokenCount.output);
+                root.sessionCost += root.calculateCost(root.currentModelId, root.tokenCount.input, root.tokenCount.output, root.tokenCount.cacheRead);
             }
             if (root.postResponseHook) {
                 root.postResponseHook();
@@ -1298,6 +1303,8 @@ Singleton {
                         root.tokenCount.input = result.tokenUsage.input;
                         root.tokenCount.output = result.tokenUsage.output;
                         root.tokenCount.total = result.tokenUsage.total;
+                        root.tokenCount.cacheRead = result.tokenUsage.cacheRead ?? 0;
+                        root.tokenCount.cacheWrite = result.tokenUsage.cacheWrite ?? 0;
                     }
                     if (result.finished) {
                         streamFlushTimer.flushNow();
