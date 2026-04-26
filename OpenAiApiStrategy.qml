@@ -175,13 +175,25 @@ ApiStrategy {
             const delta = dataJson.choices?.[0]?.delta;
             const finishReason = dataJson.choices?.[0]?.finish_reason;
 
-            // Accumulate tool call fragments (id arrives in the first delta chunk)
+            // Accumulate tool call fragments and emit early for UI responsiveness
             if (delta?.tool_calls) {
                 for (let i = 0; i < delta.tool_calls.length; i++) {
                     const tc = delta.tool_calls[i];
                     if (tc.id) _toolCallId = tc.id;
                     if (tc["function"]?.name) _toolCallName = tc["function"].name;
                     if (tc["function"]?.arguments) _toolCallArgs += tc["function"].arguments;
+                }
+                
+                // Emit early if we have a name, so the UI can show the block immediately
+                if (_toolCallName.length > 0) {
+                    let args = {};
+                    try { args = JSON.parse(_toolCallArgs); } catch(e) {
+                        // If partial JSON, try to extract command string if possible
+                        const cmdMatch = _toolCallArgs.match(/"command"\s*:\s*"([^"]*)"/);
+                        if (cmdMatch) args = { command: cmdMatch[1] };
+                    }
+                    const fc = { name: _toolCallName, args: args, id: _toolCallId };
+                    return { functionCall: fc, finished: false };
                 }
             }
 

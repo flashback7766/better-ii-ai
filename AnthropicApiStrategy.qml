@@ -105,11 +105,14 @@ ApiStrategy {
             }
         }
 
+        const budgets = [0, 8000, 32000];
+        const thinkingBudget = (thinkingEnabled && thinkingLevel > 0) ? budgets[Math.min(thinkingLevel, 2)] : 0;
+
         const requestData = {
             "model": model.model,
-            "max_tokens": (thinkingEnabled && thinkingLevel > 0) ? 32000 : 8096,
+            "max_tokens": thinkingBudget > 0 ? (thinkingBudget + 4096) : 8192,
             "messages": anthropicMessages,
-            "temperature": (thinkingEnabled && thinkingLevel > 0) ? 1 : temperature,
+            "temperature": thinkingBudget > 0 ? 1 : temperature,
             "stream": true
         };
 
@@ -117,12 +120,10 @@ ApiStrategy {
             requestData["tools"] = tools;
         }
 
-        if (thinkingEnabled && thinkingLevel > 0) {
-            // Off=0, Normal=1 (8k budget), Max=2 (32k budget)
-            const budgets = [0, 8000, 32000];
+        if (thinkingBudget > 0) {
             requestData["thinking"] = {
                 "type": "enabled",
-                "budget_tokens": budgets[Math.min(thinkingLevel, 2)]
+                "budget_tokens": thinkingBudget
             };
         }
 

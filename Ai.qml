@@ -91,10 +91,7 @@ Singleton {
     function currentModelThinkingStyle() {
         return root.modelThinkingStyles[currentModelId] ?? ""
     }
-    property string currentThinkingStyle: {
-        const style = root.modelThinkingStyles[root.currentModelId];
-        return style ?? "";
-    }
+    property string currentThinkingStyle: (modelThinkingStyles[currentModelId] || (models[currentModelId] ? models[currentModelId].thinking_style : "")) || ""
 
     property QtObject tokenCount: QtObject {
         property int input: -1
@@ -124,6 +121,7 @@ Singleton {
     readonly property var modelThinkingStyles: ({
         "gemini-3-flash": "gemini",
         "gemini-3.1-pro": "gemini",
+        "claude-haiku-4-5": "anthropic",
         "claude-sonnet-4-6": "anthropic",
         "claude-opus-4-7": "anthropic",
     })
@@ -564,7 +562,12 @@ Singleton {
             : modelList[0];
         setModel(resolvedId, false, resolvedId !== storedId);
         root.addUserModels();
-        Qt.callLater(root.loadRecentChatSummaries);
+        
+        // Restore last session and summaries
+        Qt.callLater(() => {
+            root.loadRecentChatSummaries();
+            root.loadChat("lastSession");
+        });
     }
 
     function guessModelLogo(model) {
@@ -727,6 +730,7 @@ Singleton {
         const id = idForMessage(aiMessage);
         root.messageIDs = [...root.messageIDs, id];
         root.messageByID[id] = aiMessage;
+        root.saveChat("lastSession");
     }
 
     function removeMessage(index) {
@@ -738,6 +742,7 @@ Singleton {
         delete root.messageByID[id];
         // Destroy the QML object to free memory
         if (msg && msg.destroy) msg.destroy();
+        root.saveChat("lastSession");
     }
 
     function removeMessageById(id) {
@@ -897,21 +902,27 @@ Singleton {
             const msg = root.messageByID[root.messageIDs[i]];
             if (msg && msg.destroy) msg.destroy();
         }
-        root.messageIDs = [];
-        root.messageByID = ({});
-        root.tokenCount.input = -1;
-        root.tokenCount.output = -1;
-        root.tokenCount.total = -1;
-        root.generationSpeed = 0;
-        root.pendingFilePath = "";
-        root.sessionSummary = "";
+        root.clearMessages();
         // Reload summaries from all history slots
         root.loadRecentChatSummaries();
     }
 
-    // Legacy alias
+    function resetSessionState() {
+        root.messageIDs = [];
+        root.messageByID = ({});
+        root.sessionSummary = "";
+        root.sessionCost = 0;
+        root.tokenCount.input = -1;
+        root.tokenCount.output = -1;
+        root.tokenCount.total = -1;
+        root.generationStartTime = 0;
+        root.generationSpeed = 0;
+        root.condensing = false;
+        root.responseFinished();
+    }
+
     function clearMessages() {
-        root.newChat();
+        root.resetSessionState();
     }
 
     // Approximate token count for a string (~4 chars per token)
@@ -932,13 +943,12 @@ Singleton {
     function trimContextIfNeeded(maxTokens) {
         if (maxTokens <= 0) return;
         if (estimateChatTokens() <= maxTokens) return;
-        if (root.messageIDs.length <= 8) return; // need enough messages to compress
-        if (root.condensing) return; // Only one summarization at a time
+        if (root.messageIDs.length <= 6) return; // need enough messages to compress
 
         // Collect oldest messages to compress (keep last 4 messages intact)
         const keepCount = 4;
         const compressCount = root.messageIDs.length - keepCount;
-        if (compressCount < 4) return;
+        if (compressCount < 3) return;
 
         let transcript = "";
         if (root.sessionSummary.length > 0) {
@@ -962,10 +972,10 @@ Singleton {
             return;
         }
 
-        const prompt = "You are a conversation summarizer. Your task is to condense the provided conversation history into a concise yet comprehensive summary. " +
-                       "Maintain critical key points, technical decisions, and important context. If there is an existing summary provided at the start, " +
-                       "incorporate the new information into it to create a single updated summary of the entire session so far. " +
-                       "Output ONLY the refreshed summary text.";
+        const prompt = "You are a conversation summarizer. Condense the provided conversation history into a very tight summary (approx 3-4 lines). " +
+                       "Preserve essential context, technical facts, and the user's ultimate goal. If an existing summary is provided, " +
+                       "merge the new information into it to maintain a single continuous summary of the session. " +
+                       "Output ONLY the plain text summary, no preamble.";
 
         const summarizerData = geminiStrategy.buildRequestData(model, [{ role: "user", rawContent: transcript }], prompt, 0.3, [], "", false, 0);
         
@@ -1003,6 +1013,8 @@ Singleton {
                         for (let i = summarizerProc.countToRemove - 1; i >= 0; i--) {
                             root.removeMessage(i);
                         }
+                        // Persist immediately after success to avoid loss on crash
+                        root.saveChat("lastSession");
                     }
                 } catch (e) { console.log("[AI] Summarizer parse error:", e); }
             }
@@ -1185,7 +1197,8 @@ Singleton {
             if (model.requires_key) requester.environment[`${root.apiKeyEnvVarName}`] = root.apiKeys ? (root.apiKeys[model.key_id] ?? "") : ""
 
             /* Auto-trim context if it's getting too large (~800k chars ≈ 200k tokens) */
-            root.trimContextIfNeeded(200000);
+            // Trim context to 32k tokens to keep responses fast and cheap
+            root.trimContextIfNeeded(32000);
 
             /* Build endpoint, request data */
             const endpoint = root.currentApiStrategy.buildEndpoint(model);
@@ -1598,10 +1611,9 @@ Singleton {
             message.functionPending = true;
             message.functionName = name; // Ensure functionName is set for UI usage
 
-            // Logic: Auto-approve only if the switch is ON AND the command is NOT dangerous
             const dangerous = root.isDangerousCommand(args.command);
             if (dangerous) {
-                root.addMessage(Translation.tr("⚠️ **Dangerous command detected** — manual approval required:\n```bash\n%1\n```").arg(args.command), root.interfaceRole);
+                message.content += "\n\n" + Translation.tr("⚠️ **Dangerous command detected** — manual approval required:");
             }
             if (root.functionsAutoConfirm && !dangerous) {
                 root.approveCommand(message);
@@ -1650,9 +1662,17 @@ Singleton {
      * @param chatName name of the chat
      */
     function saveChat(chatName) {
-        chatSaveFile.chatName = chatName.trim()
+        chatName = chatName.trim();
+        chatSaveFile.chatName = chatName;
         const saveContent = JSON.stringify(root.chatToJson())
         chatSaveFile.setText(saveContent)
+        
+        // Also save context summary to a separate file for persistence
+        if (root.sessionSummary.length > 0) {
+            const summaryPath = `${Directories.aiChats}/${chatName}.context_summary.txt`;
+            Quickshell.execDetached(["bash", "-c", `echo '${root.sessionSummary.replace(/'/g, "'\\''")}' > '${summaryPath}'`]);
+        }
+        
         getSavedChats.running = true;
     }
 
@@ -1662,12 +1682,24 @@ Singleton {
      */
     function loadChat(chatName) {
         try {
-            chatSaveFile.chatName = chatName.trim()
+            chatName = chatName.trim();
+            chatSaveFile.chatName = chatName;
             chatSaveFile.reload()
             const saveContent = chatSaveFile.text()
-            // console.log(saveContent)
+            if (!saveContent || saveContent.length < 2) return;
+            
             const saveData = JSON.parse(saveContent)
             root.clearMessages()
+            
+            // Load context summary if exists
+            const summaryPath = `${Directories.aiChats}/${chatName}.context_summary.txt`;
+            const summaryLoader = root.chatSummaryLoader; // reuse existing loader
+            summaryLoader.path = summaryPath;
+            summaryLoader.reload();
+            const loadedSummary = summaryLoader.text();
+            if (loadedSummary && loadedSummary.length > 0) {
+                root.sessionSummary = loadedSummary.trim();
+            }
             const saveIds = saveData.map((_, i) => {
                 // Use timestamp+index to avoid collision with live message IDs
                 return `loaded_${Date.now()}_${i}`;

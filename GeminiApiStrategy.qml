@@ -198,18 +198,39 @@ ApiStrategy {
                 return { functionCall: { name: functionCall.name, args: functionCall.args }, finished: finished };
             }
 
-            // Find text part — skip pure thought chunks (thoughtSignature only, no text)
+            // Find thinking/thought parts
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (part && (part.thought || part.thought_signature || part.thinking)) {
+                    const thoughtText = part.text || part.thought || part.thinking || "";
+                    if (thoughtText.length > 0) {
+                        if (!message._thinkOpen) {
+                            message.rawContent += "<think>";
+                            message._thinkOpen = true;
+                        }
+                        message.rawContent += thoughtText;
+                    }
+                }
+            }
+
+            // Find text part
             let textPart = null;
             for (let i = 0; i < parts.length; i++) {
-                if (parts[i] && parts[i].text !== undefined && parts[i].text !== null) {
+                if (parts[i] && parts[i].text !== undefined && parts[i].text !== null && !parts[i].thought && !parts[i].thinking) {
                     textPart = parts[i];
                     break;
                 }
             }
-            if (!textPart) return { finished: finished };
+            if (!textPart && !message._thinkOpen) return { finished: finished };
 
-            // Normal text response — write to rawContent only; flush timer syncs to content
-            const responseContent = textPart.text;
+            // Close thought block if we moved to text
+            if (textPart && message._thinkOpen) {
+                message.rawContent += "</think>\n";
+                message._thinkOpen = false;
+            }
+
+            // Normal text response
+            const responseContent = textPart ? textPart.text : "";
             message.rawContent += responseContent;
 
             // Handle annotations and metadata
@@ -257,7 +278,12 @@ ApiStrategy {
     }
 
     function onRequestFinished(message) {
-        return parseBuffer(message);
+        const result = parseBuffer(message);
+        if (message._thinkOpen) {
+            message.rawContent += "</think>\n";
+            message._thinkOpen = false;
+        }
+        return result;
     }
     
     function reset() {

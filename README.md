@@ -1,36 +1,25 @@
-# Better-ii-ai — AI Sidebar for dots-hyprland
+# Better-ii-ai — Advanced AI Sidebar for Quickshell
 
-A drop-in multi-provider AI chat sidebar extension for the [dots-hyprland](https://github.com/end-4/dots-hyprland) Quickshell config. Supports streaming, extended thinking, function calling (web search, shell commands, config editing), file attachments, chat history, and more.
+Better-ii-ai is a powerful, multi-provider AI chat extension for the [dots-hyprland](https://github.com/end-4/dots-hyprland) Quickshell configuration. It provides a seamless interface for interacting with various LLMs (Google Gemini, Anthropic Claude, OpenAI GPT, and local Ollama) directly from your desktop sidebar.
 
 ---
 
-## Features
+## ✨ Key Features
 
-| Feature | Details |
+| Feature | Description |
 |---|---|
-| **Providers** | Gemini, OpenAI, Anthropic, Ollama (auto-detect), any OpenAI-compatible endpoint |
-| **Streaming** | Adaptive flush throttle — smooth even for very large responses |
-| **Extended thinking** | Anthropic `budget_tokens` (toggle on/off) · Gemini `thinking_level` (Off / Low / Med / High) |
-| **Function calling** | Web search · run shell commands · read/edit shell config |
-| **File attachments** | Images via `/attach PATH` (Gemini & Anthropic) |
-| **Chat history** | 5-slot rotating buffer · `/save` / `/load` · Markdown export |
-| **Context compression** | Auto-trims at ~200K tokens to prevent context overflow |
-| **Cross-chat context** | `{PREVIOUS_CHAT_CONTEXT}` substitution in system prompts |
-| **Session stats** | Token counts · generation speed (tok/s) · estimated cost ($) |
-| **Keyboard shortcuts** | `Ctrl+1–9` model switch · `Ctrl+Shift+O` new chat · `Escape` close popups |
+| **Multi-Provider** | Support for **Google Gemini**, **Anthropic Claude**, **OpenAI GPT**, and any OpenAI-compatible API. |
+| **Local Models** | Automatic detection of **Ollama** models; support for **LM Studio** and **vLLM** via custom endpoints. |
+| **Tool Calling** | Native support for **Web Search**, running **Bash commands**, and editing **Shell configuration** files. |
+| **Extended Thinking** | Full support for **Anthropic's Thinking Mode** (budget tokens) and **Gemini's Thinking Levels** (Low/Med/High). |
+| **Adaptive Context** | Intelligent context compression (summarization) at ~15K tokens to keep conversations fast and cost-effective. |
+| **Rich UI** | Smooth animations, syntax-highlighted code blocks, square control buttons, and a scrollable model picker. |
+| **File Support** | Attach images, PDFs, or code files via `/attach` (supported by Gemini and Anthropic). |
+| **Chat Management** | 5-slot rotating history buffer, persistent chat saving/loading, and Markdown export. |
 
 ---
 
-## Requirements
-
-- [Quickshell](https://quickshell.outfoxxed.me/) with the `ii` config at `~/.config/quickshell/ii`
-- `curl` (for API requests)
-- `base64`, `file` (for image attachments)
-- `ollama` (optional, for local models)
-
----
-
-## Installation
+## 🚀 Installation
 
 ```bash
 git clone https://github.com/flashback7766/better-ii-ai.git
@@ -38,137 +27,54 @@ cd better-ii-ai
 bash install.sh
 ```
 
-The script will:
-1. **Back up** your existing files to `~/.config/quickshell/ii/.backup-ai-<timestamp>`
-2. Copy all files into the correct locations
-3. Print a summary of available commands
+### What the script does:
+1. **Backs up** your current configuration to `~/.config/quickshell/ii/.backup-ai-<timestamp>`.
+2. **Installs** all QML components, services, and assets into your Quickshell directory.
+3. **Optimizes** the layout for the latest dots-hyprland features.
 
-Restart Quickshell to apply:
-```bash
-pkill quickshell && quickshell & # By default, it should do an auto-reload.
-```
-
-To rollback:
-```bash
-cp -r ~/.config/quickshell/ii/.backup-ai-<timestamp>/* ~/.config/quickshell/ii/
-```
+**To apply changes:** Quickshell should reload and apply changes automatically upon file modification.
 
 ---
 
-## API Keys
+## ⌨️ Commands
 
-Set the API key for the currently selected model:
-```
-/key YOUR_API_KEY
-```
-
-View the current key:
-```
-/key get
-```
-
-Keys are stored via `KeyringStorage` (not in plain text files).
-
----
-
-## Commands
-
-| Command | Description |
+| Command | Usage |
 |---|---|
-| `/new` | Save current chat to history buffer and start fresh |
-| `/stop` | Abort all running AI processes |
-| `/model MODEL_ID` | Switch model (e.g. `/model gemini-3-flash`) |
-| `/key API_KEY` | Set API key for current model |
-| `/key get` | Show current model's API key |
-| `/tool TOOL` | Set tool: `functions`, `search`, or `none` |
-| `/temp VALUE` | Set temperature 0–2 (default 0.5) |
-| `/prompt get` | Print current system prompt |
-| `/prompt PATH` | Load system prompt from file |
-| `/attach PATH` | Attach a file to the next message |
-| `/addlocal MODEL [ENDPOINT]` | Add a local model (Ollama / LM Studio / vLLM) |
-| `/save NAME` | Save current chat to a named file |
-| `/load NAME` | Load a named chat |
-| `/export` | Export chat to Markdown in Downloads |
-| `/test` | Run a Markdown rendering test |
+| `/new` | Start a fresh chat (saves current to history buffer). |
+| `/clear` | Clear chat immediately without saving to history. |
+| `/stop` | Stop all active AI generation and processes. |
+| `/model ID` | Switch to a specific model (e.g., `/model claude-sonnet-4-6`). |
+| `/tool TOOL` | Set active toolset: `functions`, `search`, or `none`. |
+| `/key KEY` | Set the API key for the current provider. |
+| `/key get` | Show the API key for the current provider. |
+| `/attach PATH` | Attach a file (image/PDF/text) to the next request. |
+| `/temp VALUE` | Set generation temperature (0–2). |
+| `/addlocal NAME` | Add a local model (Ollama defaults, or provide a URL). |
+| `/save NAME` | Save the current session to a named file. |
+| `/load NAME` | Load a saved session. |
+| `/export` | Export the current chat to Markdown in `~/Downloads`. |
 
 ---
 
-## Models
+## 🛠 Shortcuts
 
-### Built-in
-
-| ID | Name | Provider |
-|---|---|---|
-| `gemini-3.1-flash-lite` | Gemini 3.1 Flash-Lite | Google |
-| `gemini-3-flash` | Gemini 3 Flash | Google |
-| `gemini-3.1-pro` | Gemini 3.1 Pro | Google |
-| `claude-haiku-4-5` | Claude Haiku 4.5 | Anthropic |
-| `claude-sonnet-4-6` | Claude Sonnet 4.6 | Anthropic |
-| `claude-opus-4-7` | Claude Opus 4.7 | Anthropic |
-| `gpt-5.4-nano` | GPT-5.4 Nano | OpenAI |
-| `gpt-5.4-mini` | GPT-5.4 Mini | OpenAI |
-| `gpt-5.4` | GPT-5.4 | OpenAI |
-
-Ollama models are **auto-detected** on startup if Ollama is running.
-
-### Adding a Local Model
-
-```
-/addlocal llama3.3                                          # Ollama (default)
-/addlocal deepseek-r1:32b                                   # Ollama with tag
-/addlocal my-model http://localhost:1234/v1/chat/completions # LM Studio
-/addlocal model http://192.168.1.10:8000/v1/chat/completions # Remote vLLM
-```
-
-### Adding Models via Config
-
-In your Quickshell config's `ai.extraModels`:
-```json
-[
-  {
-    "name": "My Custom Model",
-    "model": "my-model-id",
-    "endpoint": "https://api.example.com/v1/chat/completions",
-    "api_format": "openai",
-    "requires_key": true,
-    "key_id": "my_provider"
-  }
-]
-```
+- **Ctrl + 1–9**: Quickly switch between the first 9 models in your list.
+- **Ctrl + Shift + O**: Start a new chat immediately.
+- **Escape**: Close any open popups or stop current generation.
+- **Ctrl + S**: Save changes when editing a message.
 
 ---
 
-## System Prompt Substitutions
+## 📂 Architecture
 
-Use these placeholders in your system prompt file:
-
-| Placeholder | Replaced with |
-|---|---|
-| `{DISTRO}` | Linux distro name |
-| `{DATETIME}` | Current date and time |
-| `{WINDOWCLASS}` | Active window app ID |
-| `{DE}` | Desktop environment + windowing system |
-| `{PREVIOUS_CHAT_CONTEXT}` | Summaries of recent chat history slots |
+- **`Ai.qml`**: Core service managing message state, API keys, and tool execution.
+- **`AiChat.qml`**: Main UI container for the chat history and input.
+- **`AiMessage.qml`**: Individual message delegate with square control buttons (Regenerate, Copy, Edit, Delete).
+- **`ApiStrategies/`**: Specialized handlers for different API formats (Anthropic, Gemini, OpenAI).
+- **`MessageBlocks/`**: UI components for rendering Text, Code (syntax-highlighted), and Thinking blocks.
 
 ---
 
-## Architecture
+## 📝 License
 
-```
-Ai.qml                  — Singleton service: models, API keys, message state, function dispatch
-AiChat.qml              — UI: message list, input bar, model picker, functions popup
-AiMessage.qml           — Single message card (header, content blocks, controls)
-AiMessageData.qml       — QML object schema for a single message
-MessageCodeBlock.qml    — Syntax-highlighted, copyable code block
-MessageThinkBlock.qml   — Collapsible thinking / command output block
-GeminiApiStrategy.qml   — Gemini API: streaming JSON parser, thinking_level, file upload
-AnthropicApiStrategy.qml — Anthropic API: SSE parser, extended thinking, tool use
-OpenAiApiStrategy.qml   — OpenAI-compatible API: SSE parser, function calling
-install.sh              — Backup + install script
-```
-
----
-
-## License
-
-[MIT](LICENSE) — or whatever license this project uses.
+This project is open-source. See the project repository for license details.

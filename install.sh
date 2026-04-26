@@ -17,12 +17,13 @@ SERVICES="$QS_BASE/services"
 AI_DIR="$SERVICES/ai"
 SIDEBAR="$QS_BASE/modules/ii/sidebarLeft"
 SIDEBAR_AI="$SIDEBAR/aiChat"
+WIDGETS_DIR="$QS_BASE/modules/common/widgets"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Backup
 BACKUP="$QS_BASE/.backup-ai-$(date +%Y%m%d-%H%M%S)"
 echo "📦 Creating backup at $BACKUP"
-mkdir -p "$BACKUP/services/ai" "$BACKUP/modules/ii/sidebarLeft/aiChat"
+mkdir -p "$BACKUP/services/ai" "$BACKUP/modules/ii/sidebarLeft/aiChat" "$BACKUP/modules/common/widgets"
 cp "$SERVICES/Ai.qml" "$BACKUP/services/" 2>/dev/null || true
 cp "$AI_DIR/AiMessageData.qml" "$BACKUP/services/ai/" 2>/dev/null || true
 cp "$AI_DIR/AnthropicApiStrategy.qml" "$BACKUP/services/ai/" 2>/dev/null || true
@@ -32,6 +33,13 @@ cp "$SIDEBAR/AiChat.qml" "$BACKUP/modules/ii/sidebarLeft/" 2>/dev/null || true
 cp "$SIDEBAR_AI/MessageThinkBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
 cp "$SIDEBAR_AI/MessageCodeBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
 cp "$SIDEBAR_AI/AiMessage.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+cp "$SIDEBAR_AI/AiMessageControlButton.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+cp "$SIDEBAR_AI/AnnotationSourceButton.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+cp "$SIDEBAR_AI/AttachedFileIndicator.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+cp "$SIDEBAR_AI/MessageTextBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+cp "$SIDEBAR_AI/SearchQueryButton.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+cp "$WIDGETS_DIR/GroupButton.qml" "$BACKUP/modules/common/widgets/" 2>/dev/null || true
+cp "$WIDGETS_DIR/RippleButton.qml" "$BACKUP/modules/common/widgets/" 2>/dev/null || true
 
 echo "📋 Installing files..."
 echo ""
@@ -63,6 +71,28 @@ echo "  ✅ MessageCodeBlock.qml  → $SIDEBAR_AI/MessageCodeBlock.qml"
 cp "$SCRIPT_DIR/AiMessage.qml" "$SIDEBAR_AI/AiMessage.qml"
 echo "  ✅ AiMessage.qml       → $SIDEBAR_AI/AiMessage.qml"
 
+cp "$SCRIPT_DIR/AiMessageControlButton.qml" "$SIDEBAR_AI/AiMessageControlButton.qml"
+echo "  ✅ AiMessageControlButton.qml → $SIDEBAR_AI/AiMessageControlButton.qml"
+
+cp "$SCRIPT_DIR/AnnotationSourceButton.qml" "$SIDEBAR_AI/AnnotationSourceButton.qml"
+echo "  ✅ AnnotationSourceButton.qml → $SIDEBAR_AI/AnnotationSourceButton.qml"
+
+cp "$SCRIPT_DIR/AttachedFileIndicator.qml" "$SIDEBAR_AI/AttachedFileIndicator.qml"
+echo "  ✅ AttachedFileIndicator.qml → $SIDEBAR_AI/AttachedFileIndicator.qml"
+
+cp "$SCRIPT_DIR/MessageTextBlock.qml" "$SIDEBAR_AI/MessageTextBlock.qml"
+echo "  ✅ MessageTextBlock.qml → $SIDEBAR_AI/MessageTextBlock.qml"
+
+cp "$SCRIPT_DIR/SearchQueryButton.qml" "$SIDEBAR_AI/SearchQueryButton.qml"
+echo "  ✅ SearchQueryButton.qml → $SIDEBAR_AI/SearchQueryButton.qml"
+
+mkdir -p "$WIDGETS_DIR"
+cp "$SCRIPT_DIR/GroupButton.qml" "$WIDGETS_DIR/GroupButton.qml"
+echo "  ✅ GroupButton.qml     → $WIDGETS_DIR/GroupButton.qml"
+
+cp "$SCRIPT_DIR/RippleButton.qml" "$WIDGETS_DIR/RippleButton.qml"
+echo "  ✅ RippleButton.qml    → $WIDGETS_DIR/RippleButton.qml"
+
 # Install system prompt if present
 if [ -f "$SCRIPT_DIR/ii-Default.md" ]; then
     PROMPTS_DIR="$QS_BASE/defaults/ai/prompts"
@@ -81,7 +111,7 @@ if [ -f "$SCRIPT_DIR/anthropic-symbolic.svg" ]; then
 fi
 
 echo ""
-echo "🎉 Done! Restart quickshell to apply changes."
+echo "🎉 Done! Changes should be applied automatically."
 echo ""
 echo "📌 Commands:"
 echo "   /new            — Save current chat & start fresh"
@@ -101,7 +131,7 @@ echo "   • Extended thinking (Anthropic) — toggle in Functions popup"
 echo "   • Thinking level (Gemini) — Off/Low/Med/High in Functions popup"
 echo "   • Scrollable model picker with smooth animations"
 echo "   • Function calling: shell commands, config editing, web search"
-echo "   • Auto context trimming at ~200K tokens"
+echo "   • Auto context trimming at ~15K tokens (adaptive for Claude)"
 echo "   • Chat history rotation (5 slots)"
 echo "   • Session cost tracking"
 echo ""

@@ -13,9 +13,9 @@ import Quickshell.Io
 
 Item {
     id: root
-    implicitWidth: 720
+    implicitWidth: 864
     Layout.fillWidth: true
-    Layout.minimumWidth: 480
+    Layout.minimumWidth: 576
 
     property real padding: 6
     property var inputField: messageInputField
@@ -147,19 +147,8 @@ Item {
             name: "clear",
             description: Translation.tr("Clear chat without saving to history"),
             execute: () => {
-                // Destroy all message objects, skip history save
-                for (let i = 0; i < Ai.messageIDs.length; i++) {
-                    const msg = Ai.messageByID[Ai.messageIDs[i]];
-                    if (msg && msg.destroy) msg.destroy();
-                }
-                Ai.messageIDs = [];
-                Ai.messageByID = ({});
-                Ai.tokenCount.input = -1;
-                Ai.tokenCount.output = -1;
-                Ai.tokenCount.total = -1;
-                Ai.generationSpeed = 0;
-                Ai.pendingFilePath = "";
-                Ai.sessionSummary = "";
+                Ai.resetSessionState();
+                Ai.saveChat("lastSession");
             }
         },
         {
@@ -368,7 +357,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 360
+        width: 240
         readonly property real maxPopupHeight: 300
         readonly property real naturalHeight: modelPickerColumn.implicitHeight + 16
         implicitHeight: Math.min(naturalHeight, maxPopupHeight)
@@ -582,8 +571,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         implicitHeight: _row2.implicitHeight + 8
                         buttonRadius: Appearance.rounding.small
                         toggled: Ai.currentModelId === modelData
-                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.35) : "transparent"
-                        colBackgroundHover: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.5) : Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
+                        colBackground: toggled ? Qt.alpha("#ffffff", 0.12) : "transparent"
+                        colBackgroundHover: toggled ? Qt.alpha("#ffffff", 0.18) : Qt.alpha(Appearance.colors.colLayer2Hover, 0.7)
                         onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                         contentItem: RowLayout {
                             id: _row2
@@ -662,7 +651,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 300
+        width: 240
         implicitHeight: functionsPopupColumn.implicitHeight + 16
         clip: true
         radius: Appearance.rounding.large ?? 16

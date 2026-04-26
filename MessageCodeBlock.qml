@@ -20,7 +20,7 @@ ColumnLayout {
     property var messageData: {}
     property bool isCommandRequest: segmentLang === "command"
     property var displayLang: (isCommandRequest ? "bash" : segmentLang)
-    property bool commandExpanded: !root.commandDone // Auto-collapse when finished
+    property bool commandExpanded: true // Keep expanded to ensure visibility while running or when opened
 
     // Detect command completion status from content
     readonly property bool commandDone: root.messageData?.done ?? false
@@ -171,168 +171,168 @@ ColumnLayout {
     }
 
     // Code body — hidden by default for command blocks
-    RowLayout {
-        spacing: codeBlockComponentSpacing
-        visible: !root.isCommandRequest || root.commandExpanded
+    // Use a Loader to ensure proper layout when the block is expanded (fixes 'invisible code' bug)
+    Loader {
+        id: codeBodyLoader
+        Layout.fillWidth: true
+        active: !root.isCommandRequest || root.commandExpanded
+        visible: active
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: Appearance.animation.elementMoveFast.duration
-                easing.type: Easing.InOutQuad
-            }
-        }
+        sourceComponent: RowLayout {
+            spacing: codeBlockComponentSpacing
 
-        Rectangle { // Line numbers
-            implicitWidth: 40
-            implicitHeight: lineNumberColumnLayout.implicitHeight
-            Layout.fillHeight: true
-            Layout.fillWidth: false
-            topLeftRadius: Appearance.rounding.unsharpen
-            bottomLeftRadius: codeBlockBackgroundRounding
-            topRightRadius: Appearance.rounding.unsharpen
-            bottomRightRadius: Appearance.rounding.unsharpen
-            color: Appearance.colors.colLayer2
+            Rectangle { // Line numbers
+                implicitWidth: 40
+                implicitHeight: lineNumberColumnLayout.implicitHeight
+                Layout.fillHeight: true
+                Layout.fillWidth: false
+                topLeftRadius: Appearance.rounding.unsharpen
+                bottomLeftRadius: codeBlockBackgroundRounding
+                topRightRadius: Appearance.rounding.unsharpen
+                bottomRightRadius: Appearance.rounding.unsharpen
+                color: Appearance.colors.colLayer2
 
-            ColumnLayout {
-                id: lineNumberColumnLayout
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    rightMargin: 5
-                    top: parent.top
-                    topMargin: 6
-                }
-                spacing: 0
-                Repeater {
-                    model: codeTextArea.text.split("\n").length
-                    Text {
-                        required property int index
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignRight
-                        font.family: Appearance.font.family.monospace
-                        font.pixelSize: Appearance.font.pixelSize.small + 2
-                        color: Appearance.colors.colSubtext
-                        horizontalAlignment: Text.AlignRight
-                        text: index + 1
+                ColumnLayout {
+                    id: lineNumberColumnLayout
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        rightMargin: 5
+                        top: parent.top
+                        topMargin: 6
+                    }
+                    spacing: 0
+                    Repeater {
+                        model: codeTextArea.text.split("\n").length
+                        Text {
+                            required property int index
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignRight
+                            font.family: Appearance.font.family.monospace
+                            font.pixelSize: Appearance.font.pixelSize.small + 2
+                            color: Appearance.colors.colSubtext
+                            horizontalAlignment: Text.AlignRight
+                            text: index + 1
+                        }
                     }
                 }
             }
-        }
 
-        Rectangle { // Code background
-            Layout.fillWidth: true
-            topLeftRadius: Appearance.rounding.unsharpen
-            bottomLeftRadius: Appearance.rounding.unsharpen
-            topRightRadius: Appearance.rounding.unsharpen
-            bottomRightRadius: codeBlockBackgroundRounding
-            color: Appearance.colors.colLayer2
-            implicitHeight: codeColumnLayout.implicitHeight
+            Rectangle { // Code background
+                Layout.fillWidth: true
+                topLeftRadius: Appearance.rounding.unsharpen
+                bottomLeftRadius: Appearance.rounding.unsharpen
+                topRightRadius: Appearance.rounding.unsharpen
+                bottomRightRadius: codeBlockBackgroundRounding
+                color: Appearance.colors.colLayer2
+                implicitHeight: codeColumnLayout.implicitHeight
 
-            ColumnLayout {
-                id: codeColumnLayout
-                anchors.fill: parent
-                spacing: 0
-                ScrollView {
-                    id: codeScrollView
-                    Layout.fillWidth: true
-                    implicitWidth: parent.width
-                    implicitHeight: codeTextArea.implicitHeight + 1
-                    contentWidth: codeTextArea.width - 1
-                    clip: true
-                    ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                    ScrollBar.horizontal: ScrollBar {
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        padding: 5
-                        policy: ScrollBar.AsNeeded
-                        opacity: visualSize == 1 ? 0 : 1
-                        visible: opacity > 0
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: Appearance.animation.elementMoveFast.duration
-                                easing.type: Appearance.animation.elementMoveFast.type
-                                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
-                            }
-                        }
-                        contentItem: Rectangle {
-                            implicitHeight: 6
-                            radius: Appearance.rounding.small
-                            color: Appearance.colors.colLayer2Active
-                        }
-                    }
-
-                    TextArea {
-                        id: codeTextArea
+                ColumnLayout {
+                    id: codeColumnLayout
+                    anchors.fill: parent
+                    spacing: 0
+                    ScrollView {
+                        id: codeScrollView
                         Layout.fillWidth: true
-                        readOnly: !editing
-                        selectByMouse: enableMouseSelection || editing
-                        renderType: Text.NativeRendering
-                        font.family: Appearance.font.family.monospace
-                        font.hintingPreference: Font.PreferNoHinting
-                        font.pixelSize: Appearance.font.pixelSize.small + 2
-                        selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
-                        selectionColor: Appearance.colors.colSecondaryContainer
-                        color: messageData.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
-                        text: segmentContent
-                        onTextChanged: { segmentContent = text }
-
-                        Keys.onPressed: (event) => {
-                            if (event.key === Qt.Key_Tab) {
-                                const cursor = codeTextArea.cursorPosition;
-                                codeTextArea.insert(cursor, "    ");
-                                codeTextArea.cursorPosition = cursor + 4;
-                                event.accepted = true;
-                            } else if ((event.key === Qt.Key_C) && event.modifiers == Qt.ControlModifier) {
-                                codeTextArea.copy();
-                                event.accepted = true;
+                        implicitWidth: parent.width
+                        implicitHeight: codeTextArea.implicitHeight + 1
+                        contentWidth: codeTextArea.width - 1
+                        clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+                        ScrollBar.horizontal: ScrollBar {
+                            anchors.bottom: parent.bottom
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            padding: 5
+                            policy: ScrollBar.AsNeeded
+                            opacity: visualSize == 1 ? 0 : 1
+                            visible: opacity > 0
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: Appearance.animation.elementMoveFast.duration
+                                    easing.type: Appearance.animation.elementMoveFast.type
+                                    easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                                }
+                            }
+                            contentItem: Rectangle {
+                                implicitHeight: 6
+                                radius: Appearance.rounding.small
+                                color: Appearance.colors.colLayer2Active
                             }
                         }
 
-                        SyntaxHighlighter {
-                            id: highlighter
-                            textEdit: codeTextArea
-                            repository: Repository
-                            definition: Repository.definitionForName(root.displayLang || "plaintext")
-                            theme: Appearance.syntaxHighlightingTheme
+                        TextArea {
+                            id: codeTextArea
+                            Layout.fillWidth: true
+                            readOnly: !editing
+                            selectByMouse: enableMouseSelection || editing
+                            renderType: Text.NativeRendering
+                            font.family: Appearance.font.family.monospace
+                            font.hintingPreference: Font.PreferNoHinting
+                            font.pixelSize: Appearance.font.pixelSize.small + 2
+                            selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
+                            selectionColor: Appearance.colors.colSecondaryContainer
+                            color: messageData.thinking ? Appearance.colors.colSubtext : Appearance.colors.colOnLayer1
+                            text: segmentContent
+                            onTextChanged: { segmentContent = text }
+
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Tab) {
+                                    const cursor = codeTextArea.cursorPosition;
+                                    codeTextArea.insert(cursor, "    ");
+                                    codeTextArea.cursorPosition = cursor + 4;
+                                    event.accepted = true;
+                                } else if ((event.key === Qt.Key_C) && event.modifiers == Qt.ControlModifier) {
+                                    codeTextArea.copy();
+                                    event.accepted = true;
+                                }
+                            }
+
+                            SyntaxHighlighter {
+                                id: highlighter
+                                textEdit: codeTextArea
+                                repository: Repository
+                                definition: Repository.definitionForName(root.displayLang || "plaintext")
+                                theme: Appearance.syntaxHighlightingTheme
+                            }
                         }
                     }
-                }
-                Loader {
-                    active: root.isCommandRequest && root.messageData.functionPending
-                    visible: active
-                    Layout.fillWidth: true
-                    Layout.margins: 6
-                    Layout.topMargin: 0
-                    sourceComponent: RowLayout {
-                        Item { Layout.fillWidth: true }
-                        ButtonGroup {
-                            GroupButton {
-                                contentItem: RowLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    MaterialSymbol { text: "close"; iconSize: 14; color: Appearance.colors.colOnLayer2 }
-                                    StyledText {
-                                        text: Translation.tr("Reject")
-                                        font.pixelSize: Appearance.font.pixelSize.small + 2
-                                        color: Appearance.colors.colOnLayer2
+                    Loader {
+                        active: root.isCommandRequest && root.messageData.functionPending
+                        visible: active
+                        Layout.fillWidth: true
+                        Layout.margins: 6
+                        Layout.topMargin: 0
+                        sourceComponent: RowLayout {
+                            Item { Layout.fillWidth: true }
+                            ButtonGroup {
+                                GroupButton {
+                                    contentItem: RowLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 4
+                                        MaterialSymbol { text: "close"; iconSize: 14; color: Appearance.colors.colOnLayer2 }
+                                        StyledText {
+                                            text: Translation.tr("Reject")
+                                            font.pixelSize: Appearance.font.pixelSize.small + 2
+                                            color: Appearance.colors.colOnLayer2
+                                        }
                                     }
+                                    onClicked: Ai.rejectCommand(root.messageData)
                                 }
-                                onClicked: Ai.rejectCommand(root.messageData)
-                            }
-                            GroupButton {
-                                toggled: true
-                                contentItem: RowLayout {
-                                    anchors.centerIn: parent
-                                    spacing: 4
-                                    MaterialSymbol { text: "check"; iconSize: 14; color: Appearance.colors.colOnPrimary }
-                                    StyledText {
-                                        text: Translation.tr("Approve")
-                                        font.pixelSize: Appearance.font.pixelSize.small + 2
-                                        color: Appearance.colors.colOnPrimary
+                                GroupButton {
+                                    toggled: true
+                                    contentItem: RowLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 4
+                                        MaterialSymbol { text: "check"; iconSize: 14; color: Appearance.colors.colOnPrimary }
+                                        StyledText {
+                                            text: Translation.tr("Approve")
+                                            font.pixelSize: Appearance.font.pixelSize.small + 2
+                                            color: Appearance.colors.colOnPrimary
+                                        }
                                     }
+                                    onClicked: Ai.approveCommand(root.messageData)
                                 }
-                                onClicked: Ai.approveCommand(root.messageData)
                             }
                         }
                     }
