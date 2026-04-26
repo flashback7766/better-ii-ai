@@ -23,7 +23,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Backup
 BACKUP="$QS_BASE/.backup-ai-$(date +%Y%m%d-%H%M%S)"
 echo "📦 Creating backup at $BACKUP"
-mkdir -p "$BACKUP/services/ai" "$BACKUP/modules/ii/sidebarLeft/aiChat" "$BACKUP/modules/common/widgets"
+mkdir -p "$BACKUP/services/ai" "$BACKUP/modules/ii/sidebarLeft/aiChat" "$BACKUP/modules/common/widgets" "$BACKUP/modules/common"
+cp "$QS_BASE/modules/common/Appearance.qml" "$BACKUP/modules/common/" 2>/dev/null || true
 cp "$SERVICES/Ai.qml" "$BACKUP/services/" 2>/dev/null || true
 cp "$AI_DIR/AiMessageData.qml" "$BACKUP/services/ai/" 2>/dev/null || true
 cp "$AI_DIR/AnthropicApiStrategy.qml" "$BACKUP/services/ai/" 2>/dev/null || true
@@ -61,6 +62,9 @@ echo "  ✅ OpenAiApiStrategy.qml    → $AI_DIR/OpenAiApiStrategy.qml"
 
 cp "$SCRIPT_DIR/AiChat.qml" "$SIDEBAR/AiChat.qml"
 echo "  ✅ AiChat.qml          → $SIDEBAR/AiChat.qml"
+
+cp "$SCRIPT_DIR/modules/common/Appearance.qml" "$QS_BASE/modules/common/Appearance.qml"
+echo "  ✅ Appearance.qml      → $QS_BASE/modules/common/Appearance.qml"
 
 cp "$SCRIPT_DIR/MessageThinkBlock.qml" "$SIDEBAR_AI/MessageThinkBlock.qml"
 echo "  ✅ MessageThinkBlock.qml → $SIDEBAR_AI/MessageThinkBlock.qml"

@@ -15,6 +15,7 @@ Better-ii-ai is a powerful, multi-provider AI chat extension for the [dots-hyprl
 | **Local Models** | Automatic detection of **Ollama** models; support for **LM Studio** and **vLLM** via custom endpoints. |
 | **Tool Calling** | Native support for **Web Search**, running **Bash commands**, and editing **Shell configuration** files. |
 | **Extended Thinking** | Full support for **Anthropic's Thinking Mode** (budget tokens) and **Gemini's Thinking Levels** (Low/Med/High). |
+| **Custom Appearance** | Optimized **Appearance.qml** with adaptive sidebar sizing (1.25x wider) and premium typography. |
 | **Adaptive Context** | Intelligent context compression (summarization) at ~15K tokens to keep conversations fast and cost-effective. |
 | **Rich UI** | Smooth animations, syntax-highlighted code blocks, square control buttons, and a scrollable model picker. |
 | **File Support** | Attach images, PDFs, or code files via `/attach` (supported by Gemini and Anthropic). |

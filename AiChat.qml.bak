@@ -13,9 +13,9 @@ import Quickshell.Io
 
 Item {
     id: root
-    implicitWidth: 864
+    implicitWidth: 1024
     Layout.fillWidth: true
-    Layout.minimumWidth: 576
+    Layout.minimumWidth: 480
 
     property real padding: 6
     property var inputField: messageInputField
@@ -357,7 +357,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 480
+        width: 240
         readonly property real maxPopupHeight: 300
         readonly property real naturalHeight: modelPickerColumn.implicitHeight + 16
         implicitHeight: Math.min(naturalHeight, maxPopupHeight)
@@ -443,7 +443,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             ColumnLayout {
                 id: modelPickerColumn
                 width: modelPickerFlickable.width
-                spacing: 4
+                spacing: 6
 
                 Item { Layout.fillWidth: true; implicitHeight: 4 }
                 StyledText {
@@ -518,9 +518,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                         Layout.fillWidth: true; 
                                         font.pixelSize: Appearance.font.pixelSize.small + 2; 
                                         font.weight: Font.SemiBold; 
-                                        color: Appearance.m3colors.m3onSurface
-                                        opacity: parent.parent.parent.toggled ? 1.0 : 0.85
-                                        text: Ai.models[modelData]?.name ?? modelData; 
+                                        color: parent.parent.parent.toggled ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurface; 
+                                    opacity: parent.parent.parent.toggled ? 1.0 : 0.9                                        text: Ai.models[modelData]?.name ?? modelData; 
                                         elide: Text.ElideRight 
                                     }
                                     StyledText { 
@@ -622,9 +621,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                     Layout.fillWidth: true; 
                                     font.pixelSize: Appearance.font.pixelSize.small + 2; 
                                     font.weight: Font.SemiBold; 
-                                    color: Appearance.m3colors.m3onSurface
-                                    opacity: parent.parent.parent.toggled ? 1.0 : 0.85
-                                    text: Ai.models[modelData]?.name ?? modelData; 
+                                    color: parent.parent.parent.toggled ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurface; 
+                                    opacity: parent.parent.parent.toggled ? 1.0 : 0.9                                    text: Ai.models[modelData]?.name ?? modelData; 
                                     elide: Text.ElideRight 
                                 }
                                 StyledText { 
@@ -662,11 +660,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         function open() {
             modelPickerPopup.close();
             var pos = functionsButton.mapToItem(root, 0, 0);
-            x = pos.x - (width - functionsButton.width); // Right-align to button
+            x = pos.x;
             y = pos.y - implicitHeight - 6;
-            // Clamp to not go off-screen left/right
-            if (x < 6) x = 6;
-            if (x + width > root.width - 6) x = root.width - width - 6;
+            // Clamp to not go off-screen left
+            if (x + width > root.width) x = root.width - width - 6;
             isOpen = true;
         }
         function close() {
@@ -697,7 +694,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 320
+        width: 360
         implicitHeight: functionsPopupColumn.implicitHeight + 16
         clip: true
         radius: Appearance.rounding.large ?? 16
@@ -741,8 +738,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
                     colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                     onClicked: {
-                        Ai.setTool(modelData);
-                        functionsPopup.close();
+                        if (modelData) {
+                            Ai.setTool(modelData);
+                            functionsPopup.close();
+                        }
                     }
                     contentItem: RowLayout {
                         anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
@@ -751,9 +750,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         Rectangle {
                             width: 34; height: 34; radius: 10
                             color: {
-                                if (modelData === "functions") return Qt.alpha(Appearance.m3colors.m3primary, 0.12);
-                                if (modelData === "search") return Qt.alpha("#34A853", 0.12);
-                                return Qt.alpha(Appearance.colors.colSubtext, 0.08);
+                                // Using hex with alpha for better compatibility
+                                if (modelData === "functions") return "#2065558F"; // Faint primary
+                                if (modelData === "search") return "#2034A853"; // Faint green
+                                return "#15777777"; // Faint grey
                             }
                             MaterialSymbol {
                                 anchors.centerIn: parent
@@ -773,11 +773,14 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 Layout.maximumWidth: 280
                                 font.pixelSize: Appearance.font.pixelSize.small + 2
                                 font.weight: Font.SemiBold
-                                color: Appearance.m3colors.m3onSurface
-                                opacity: parent.parent.parent.toggled ? 1.0 : 0.85
-                                text: modelData === "functions" ? Translation.tr("All Tools") : 
-                                      modelData === "search" ? Translation.tr("Search Only") : 
-                                      Translation.tr("No Tools")
+                                color: parent.parent.parent.toggled ? Appearance.m3colors.m3primary : Appearance.m3colors.m3onSurface
+                                text: {
+                                    if (!modelData) return "—";
+                                    if (modelData === "functions") return Translation.tr("All Tools");
+                                    if (modelData === "search") return Translation.tr("Search Only");
+                                    if (modelData === "none") return Translation.tr("No Tools");
+                                    return modelData.charAt(0).toUpperCase() + modelData.slice(1);
+                                }
                                 elide: Text.ElideRight
                             }
                             StyledText {
@@ -935,25 +938,25 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 implicitHeight: 1; color: Appearance.colors.colOutlineVariant; opacity: 0.5
             }
 
-            RowLayout {
-                Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12
-                spacing: 12
+                RowLayout {
+                    Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12
+                    spacing: 12
 
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: 0
-                    StyledText {
-                        font.pixelSize: Appearance.font.pixelSize.small + 2
-                        color: Appearance.m3colors.m3onSurface
-                        text: Translation.tr("Auto-confirm")
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 0
+                        StyledText {
+                            font.pixelSize: Appearance.font.pixelSize.small + 2
+                            color: Appearance.m3colors.m3onSurface
+                            text: Translation.tr("Auto-confirm")
+                        }
+                        StyledText {
+                            font.pixelSize: Appearance.font.pixelSize.smaller + 2
+                            color: Appearance.colors.colSubtext
+                            text: Translation.tr("Run shell commands automatically")
+                        }
                     }
-                    StyledText {
-                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                        color: Appearance.colors.colSubtext
-                        text: Translation.tr("Run shell commands automatically")
-                    }
-                }
 
-                Item { Layout.fillWidth: true }
+                    Item { Layout.fillWidth: true }
 
                 Rectangle {
                     width: 44; height: 24; radius: 12

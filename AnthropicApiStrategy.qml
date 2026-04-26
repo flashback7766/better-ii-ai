@@ -26,7 +26,7 @@ ApiStrategy {
     }
 
     function buildAuthorizationHeader(apiKeyEnvVarName) {
-        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: prompt-caching-2024-07-31,output-thinking-2025-02-19'`
+        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: prompt-caching-2024-07-31' -H 'anthropic-beta: output-thinking-2025-02-19'`
     }
 
     function buildRequestData(model, messages, systemPrompt, temperature, tools, pendingFilePath, thinkingEnabled, thinkingLevel) {

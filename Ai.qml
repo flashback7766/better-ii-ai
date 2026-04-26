@@ -397,6 +397,7 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: ~$0.25/M input, ~$1.50/M output\n\n**Instructions**: Log into Google account → AI Studio → Get API key"),
             "api_format": "gemini",
+            "thinking_style": "gemini",
         }),
         "gemini-3-flash": aiModelComponent.createObject(this, {
             "name": "Gemini Flash",
