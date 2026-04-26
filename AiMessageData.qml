@@ -13,7 +13,6 @@ QtObject {
     property string fileTextContent  // Extracted text content from non-image files
     property string localFilePath
     property string model
-    property bool thinking: true
     property bool done: false
     property var annotations: []
     property var annotationSources: []
@@ -24,6 +23,5 @@ QtObject {
     property bool functionPending: false
     property string contentBeforeCommand
     property var functionCallParts
-    property string thoughtSignature
     property bool visibleToUser: true
 }

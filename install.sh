@@ -23,15 +23,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Backup
 BACKUP="$QS_BASE/.backup-ai-$(date +%Y%m%d-%H%M%S)"
 echo "📦 Creating backup at $BACKUP"
-mkdir -p "$BACKUP/services/ai" "$BACKUP/modules/ii/sidebarLeft/aiChat" "$BACKUP/modules/common/widgets" "$BACKUP/modules/common"
+mkdir -p "$BACKUP/services/ai" "$BACKUP/modules/ii/sidebarLeft/aiChat" "$BACKUP/modules/common/widgets" "$BACKUP/modules/common/functions"
 cp "$QS_BASE/modules/common/Appearance.qml" "$BACKUP/modules/common/" 2>/dev/null || true
+cp "$QS_BASE/modules/common/functions/StringUtils.qml" "$BACKUP/modules/common/functions/" 2>/dev/null || true
 cp "$SERVICES/Ai.qml" "$BACKUP/services/" 2>/dev/null || true
 cp "$AI_DIR/AiMessageData.qml" "$BACKUP/services/ai/" 2>/dev/null || true
 cp "$AI_DIR/AnthropicApiStrategy.qml" "$BACKUP/services/ai/" 2>/dev/null || true
 cp "$AI_DIR/GeminiApiStrategy.qml" "$BACKUP/services/ai/" 2>/dev/null || true
+cp "$AI_DIR/AiModel.qml" "$BACKUP/services/ai/" 2>/dev/null || true
 cp "$AI_DIR/OpenAiApiStrategy.qml" "$BACKUP/services/ai/" 2>/dev/null || true
 cp "$SIDEBAR/AiChat.qml" "$BACKUP/modules/ii/sidebarLeft/" 2>/dev/null || true
-cp "$SIDEBAR_AI/MessageThinkBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
 cp "$SIDEBAR_AI/MessageCodeBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
 cp "$SIDEBAR_AI/AiMessage.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
 cp "$SIDEBAR_AI/AiMessageControlButton.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
@@ -60,14 +61,19 @@ echo "  ✅ GeminiApiStrategy.qml    → $AI_DIR/GeminiApiStrategy.qml"
 cp "$SCRIPT_DIR/OpenAiApiStrategy.qml" "$AI_DIR/OpenAiApiStrategy.qml"
 echo "  ✅ OpenAiApiStrategy.qml    → $AI_DIR/OpenAiApiStrategy.qml"
 
+cp "$SCRIPT_DIR/services/ai/AiModel.qml" "$AI_DIR/AiModel.qml"
+echo "  ✅ AiModel.qml             → $AI_DIR/AiModel.qml"
+
 cp "$SCRIPT_DIR/AiChat.qml" "$SIDEBAR/AiChat.qml"
 echo "  ✅ AiChat.qml          → $SIDEBAR/AiChat.qml"
 
 cp "$SCRIPT_DIR/modules/common/Appearance.qml" "$QS_BASE/modules/common/Appearance.qml"
 echo "  ✅ Appearance.qml      → $QS_BASE/modules/common/Appearance.qml"
 
-cp "$SCRIPT_DIR/MessageThinkBlock.qml" "$SIDEBAR_AI/MessageThinkBlock.qml"
-echo "  ✅ MessageThinkBlock.qml → $SIDEBAR_AI/MessageThinkBlock.qml"
+mkdir -p "$QS_BASE/modules/common/functions"
+cp "$SCRIPT_DIR/modules/common/functions/StringUtils.qml" "$QS_BASE/modules/common/functions/StringUtils.qml"
+echo "  ✅ StringUtils.qml     → $QS_BASE/modules/common/functions/StringUtils.qml"
+
 
 cp "$SCRIPT_DIR/MessageCodeBlock.qml" "$SIDEBAR_AI/MessageCodeBlock.qml"
 echo "  ✅ MessageCodeBlock.qml  → $SIDEBAR_AI/MessageCodeBlock.qml"
@@ -133,8 +139,7 @@ echo ""
 echo "💡 Recommendation: Gemini models are highly recommended for the best experience!"
 echo ""
 echo "📌 Features:"
-echo "   • Extended thinking (Anthropic) — toggle in Functions popup"
-echo "   • Thinking level (Gemini) — Off/Low/Med/High in Functions popup"
+echo ""
 echo "   • Scrollable model picker with smooth animations"
 echo "   • Function calling: shell commands, config editing, web search"
 echo "   • Auto context trimming at ~15K tokens (adaptive for Claude)"

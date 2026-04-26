@@ -7,7 +7,7 @@ ApiStrategy {
         return model.endpoint;
     }
 
-    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string, thinkingEnabled, thinkingLevel) {
+    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
         let baseData = {
             "model": model.model,
             "messages": [
@@ -215,22 +215,8 @@ ApiStrategy {
 
             let newContent = "";
             const responseContent = delta?.content || dataJson.message?.content;
-            const responseReasoning = delta?.reasoning || delta?.reasoning_content;
-
             if (responseContent && responseContent.length > 0) {
-                if (isReasoning) {
-                    isReasoning = false;
-                    const endBlock = "\n\n</think>\n\n";
-                    message.rawContent += endBlock;
-                }
                 newContent = responseContent;
-            } else if (responseReasoning && responseReasoning.length > 0) {
-                if (!isReasoning) {
-                    isReasoning = true;
-                    const startBlock = "\n\n<think>\n\n";
-                    message.rawContent += startBlock;
-                }
-                newContent = responseReasoning;
             }
 
             // Write to rawContent only; flush timer syncs to content

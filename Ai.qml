@@ -13,7 +13,7 @@ import qs.services.ai
  * AI chat service for Quickshell desktop. Multi-provider LLM client with:
  * - Providers: Gemini, OpenAI, Anthropic, Groq, xAI, DeepSeek, Ollama, any OpenAI-compatible
  * - Features: streaming, function calling (search, shell commands, config editing),
- *   extended thinking (Anthropic/Gemini), file attachments, chat history,
+ *   file attachments, chat history,
  *   context compression, export, adaptive UI throttling
  */
 Singleton {
@@ -51,7 +51,6 @@ Singleton {
                 requester.message.content = Translation.tr("*[Interrupted]*");
                 requester.message.rawContent = Translation.tr("*[Interrupted]*");
             }
-            requester.message.thinking = false;
             requester.message.done = true;
         }
         root.postResponseHook = null;
@@ -61,7 +60,6 @@ Singleton {
     property string systemPrompt: {
         let prompt = Config.options?.ai?.systemPrompt ?? "";
         for (let key in root.promptSubstitutions) {
-            // prompt = prompt.replaceAll(key, root.promptSubstitutions[key]);
             // QML/JS doesn't support replaceAll, so use split/join
             prompt = prompt.split(key).join(root.promptSubstitutions[key]);
         }
@@ -82,17 +80,8 @@ Singleton {
     property var postResponseHook
     property real temperature: Persistent.states?.ai?.temperature ?? 0.5
 
-    // Extended thinking
-    property bool thinkingEnabled: Persistent.states?.ai?.thinkingEnabled ?? false
-    // Anthropic: used as budget_tokens. Gemini: level 0-3 (off/low/med, max)
-    property int thinkingLevel: Persistent.states?.ai?.thinkingLevel ?? 0
     property bool promptCaching: Persistent.states?.ai?.promptCaching ?? true
-    property bool functionsAutoConfirm: Persistent.states?.ai?.functionsAutoConfirm ?? false
-    readonly property var geminiThinkingLabels: ["Off", "Low", "Med", "High"]
-    function currentModelThinkingStyle() {
-        return root.modelThinkingStyles[currentModelId] ?? ""
-    }
-    property string currentThinkingStyle: (modelThinkingStyles[currentModelId] || (models[currentModelId] ? models[currentModelId].thinking_style : "")) || ""
+    property bool functionsAutoConfirm: true
 
     property QtObject tokenCount: QtObject {
         property int input: -1
@@ -120,15 +109,6 @@ Singleton {
         "gpt-5.4": [2.50, 15.00],
     })
 
-    // Thinking style per model — "gemini" uses thinking_level, "anthropic" uses budget_tokens
-    readonly property var modelThinkingStyles: ({
-        "gemini-3-flash": "gemini",
-        "gemini-3.1-pro": "gemini",
-        "claude-haiku-4-5": "anthropic",
-        "claude-sonnet-4-6": "anthropic",
-        "claude-opus-4-7": "anthropic",
-    })
-
     function calculateCost(modelId, inputTokens, outputTokens, cacheReadTokens = 0) {
         const pricing = root.modelPricing[modelId];
         if (!pricing) return 0;
@@ -138,8 +118,8 @@ Singleton {
     }
 
     function idForMessage(message) {
-        // Generate a unique ID using timestamp and random value
-        return Date.now().toString(36) + Math.random().toString(36).substr(2, 8);
+        // Generate a unique ID using high-res timestamp and random entropy
+        return Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 12);
     }
 
     function safeModelName(modelName) {
@@ -397,7 +377,6 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: ~$0.25/M input, ~$1.50/M output\n\n**Instructions**: Log into Google account → AI Studio → Get API key"),
             "api_format": "gemini",
-            "thinking_style": "gemini",
         }),
         "gemini-3-flash": aiModelComponent.createObject(this, {
             "name": "Gemini Flash",
@@ -411,7 +390,6 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: ~$0.50/M input, ~$3/M output\n\n**Instructions**: Log into Google account → AI Studio → Get API key"),
             "api_format": "gemini",
-            "thinking_style": "gemini",
         }),
         "gemini-3.1-pro": aiModelComponent.createObject(this, {
             "name": "Gemini Pro",
@@ -425,7 +403,6 @@ Singleton {
             "key_get_link": "https://aistudio.google.com/app/apikey",
             "key_get_description": Translation.tr("**Pricing**: ~$2/M input, ~$12/M output\n\n**Instructions**: Log into Google account → AI Studio → Get API key"),
             "api_format": "gemini",
-            "thinking_style": "gemini",
         }),
         "claude-haiku-4-5": aiModelComponent.createObject(this, {
             "name": "Claude Haiku",
@@ -452,7 +429,6 @@ Singleton {
             "key_get_link": "https://console.anthropic.com/settings/keys",
             "key_get_description": Translation.tr("**Pricing**: ~$3/M input, ~$15/M output\n\n**Instructions**: Anthropic Console → API Keys → Create Key"),
             "api_format": "anthropic",
-            "thinking_style": "anthropic",
         }),
         "claude-opus-4-7": aiModelComponent.createObject(this, {
             "name": "Claude Opus",
@@ -466,7 +442,6 @@ Singleton {
             "key_get_link": "https://console.anthropic.com/settings/keys",
             "key_get_description": Translation.tr("**Pricing**: ~$15/M input, ~$75/M output\n\n**Instructions**: Anthropic Console → API Keys → Create Key"),
             "api_format": "anthropic",
-            "thinking_style": "anthropic",
         }),
         "gpt-5.4-nano": aiModelComponent.createObject(this, {
             "name": "GPT Nano",
@@ -730,7 +705,6 @@ Singleton {
             "role": role,
             "content": message,
             "rawContent": message,
-            "thinking": false,
             "done": true,
         });
         const id = idForMessage(aiMessage);
@@ -740,14 +714,24 @@ Singleton {
     }
 
     function removeMessage(index) {
-        if (index < 0 || index >= messageIDs.length) return;
-        const id = root.messageIDs[index];
-        const msg = root.messageByID[id];
-        root.messageIDs.splice(index, 1);
+        root.removeMessagesRange(index, 1);
+    }
+
+    /**
+     * Efficiently removes a range of messages and saves once.
+     */
+    function removeMessagesRange(startIndex, count) {
+        if (startIndex < 0 || startIndex + count > root.messageIDs.length || count <= 0) return;
+        
+        for (let i = 0; i < count; i++) {
+            const id = root.messageIDs[startIndex + i];
+            const msg = root.messageByID[id];
+            if (msg && msg.destroy) msg.destroy();
+            delete root.messageByID[id];
+        }
+        
+        root.messageIDs.splice(startIndex, count);
         root.messageIDs = [...root.messageIDs];
-        delete root.messageByID[id];
-        // Destroy the QML object to free memory
-        if (msg && msg.destroy) msg.destroy();
         root.saveChat("lastSession");
     }
 
@@ -777,12 +761,6 @@ Singleton {
             root.currentModelId = modelId
             if (setPersistentState) root.savePersistentState("model", modelId)
 
-            // Reset thinking state if new model doesn't support it
-            const newStyle = root.modelThinkingStyles[modelId] ?? "";
-            if (newStyle === "") {
-                root.thinkingEnabled = false;
-                root.thinkingLevel = 0;
-            }
             if (feedback) root.addMessage(Translation.tr("Switched to **%1**").arg(models[modelId].name), Ai.interfaceRole);
             const model = models[modelId]
             // See if policy prevents online models
@@ -1015,12 +993,8 @@ Singleton {
                     if (newSummary && newSummary.length > 0) {
                         root.sessionSummary = newSummary.trim();
                         console.log("[AI] Context compressed. New summary length:", root.sessionSummary.length);
-                        // Safely remove messages
-                        for (let i = summarizerProc.countToRemove - 1; i >= 0; i--) {
-                            root.removeMessage(i);
-                        }
-                        // Persist immediately after success to avoid loss on crash
-                        root.saveChat("lastSession");
+                        // Safely remove messages in bulk (this also saves the chat)
+                        root.removeMessagesRange(0, summarizerProc.countToRemove);
                     }
                 } catch (e) { console.log("[AI] Summarizer parse error:", e); }
             }
@@ -1224,7 +1198,7 @@ Singleton {
             }
 
             const toolsForFormat = root.tools[model.api_format] ?? root.tools["openai"];
-            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, toolsForFormat[root.currentTool] ?? [], root.pendingFilePath, root.thinkingEnabled, root.thinkingLevel);
+            const data = root.currentApiStrategy.buildRequestData(model, filteredMessageArray, root.systemPrompt, root.temperature, toolsForFormat[root.currentTool] ?? [], root.pendingFilePath);
             // console.log("[Ai] Request data: ", JSON.stringify(data, null, 2));
 
             let requestHeaders = {
@@ -1237,7 +1211,6 @@ Singleton {
                 "model": currentModelId,
                 "content": "",
                 "rawContent": "",
-                "thinking": true,
                 "done": false,
             });
             const id = idForMessage(requester.message);
@@ -1289,7 +1262,6 @@ Singleton {
         stdout: SplitParser {
             onRead: data => {
                 if (data.length === 0) return;
-                if (requester.message.thinking) requester.message.thinking = false;
 
                 try {
                     const result = requester.currentStrategy.parseResponseLine(data, requester.message);
@@ -1430,22 +1402,21 @@ Singleton {
         if (messageIndex === -1) return;
         const message = root.messageByID[id];
         if (message.role !== "assistant") return;
-        // Remove all messages after this one
-        for (let i = root.messageIDs.length - 1; i >= messageIndex; i--) {
-            root.removeMessage(i);
-        }
+        // Remove all messages after this one in bulk
+        const countToRemove = root.messageIDs.length - messageIndex;
+        root.removeMessagesRange(messageIndex, countToRemove);
         requester.makeRequest();
     }
 
     function createFunctionOutputMessage(name, output, includeOutputInChat = true) {
+        const content = `[[ Output of ${name} ]]${includeOutputInChat ? ("\n\n" + output) : ""}`;
         return aiMessageComponent.createObject(root, {
             "role": "user",
-            "content": `[[ Output of ${name} ]]${includeOutputInChat ? ("\n\n<think>\n" + output + "\n</think>") : ""}`,
-            "rawContent": `[[ Output of ${name} ]]${includeOutputInChat ? ("\n\n<think>\n" + output + "\n</think>") : ""}`,
+            "content": content,
+            "rawContent": content,
             "functionName": name,
             "functionResponse": output,
             "visibleToUser": false,
-            "thinking": false,
             "done": true,
         });
     }
@@ -1521,7 +1492,7 @@ Singleton {
                 }
                 // Update the hidden function output message for API context
                 commandExecutionProc.outputMessage.functionResponse = commandExecutionProc.collectedOutput;
-                const outputContent = `[[ Output of ${commandExecutionProc.outputMessage.functionName} ]]\n\n<think>\n${commandExecutionProc.collectedOutput}\n</think>`;
+                const outputContent = `[[ Output of ${commandExecutionProc.outputMessage.functionName} ]]\n\n${commandExecutionProc.collectedOutput}`;
                 commandExecutionProc.outputMessage.rawContent = outputContent;
                 commandExecutionProc.outputMessage.content = outputContent;
                 // Update the UI inline: show $ command + last 3 lines of output
@@ -1621,9 +1592,11 @@ Singleton {
 
             const dangerous = root.isDangerousCommand(args.command);
             if (dangerous) {
-                message.content += "\n\n" + Translation.tr("⚠️ **Dangerous command detected** — manual approval required:");
-            }
-            if (root.functionsAutoConfirm && !dangerous) {
+                message.content += "\n\n" + Translation.tr("❌ **Command blocked**: This command is considered dangerous and cannot be executed automatically.");
+                message.functionPending = false;
+                addFunctionOutputMessage(name, "Error: Command rejected due to safety policy.");
+                requester.makeRequest(); // Notify model of rejection
+            } else {
                 root.approveCommand(message);
             }
         } else {
@@ -1644,7 +1617,6 @@ Singleton {
                     "fileTextContent": message.fileTextContent,
                     "localFilePath": message.localFilePath,
                     "model": message.model,
-                    "thinking": false,
                     "done": true,
                     "annotations": message.annotations,
                     "annotationSources": message.annotationSources,

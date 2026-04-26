@@ -61,7 +61,7 @@ Rectangle {
                 newContent += "```" + (lang ?? "") + "\n" + cleanCode + "\n```";
             } else if (isThink) {
                 // Think blocks: preserve as-is (not edited by user)
-                newContent += "<think>" + content + "</think>\n";
+                newContent += content + "\n";
             } else {
                 newContent += content;
             }
@@ -353,15 +353,6 @@ Rectangle {
                         segmentContent: modelData.content
                         segmentLang: modelData.lang
                         messageData: root.messageData
-                    } }
-                    DelegateChoice { roleValue: "think"; MessageThinkBlock {
-                        editing: root.editing
-                        renderMarkdown: root.renderMarkdown
-                        enableMouseSelection: root.enableMouseSelection
-                        segmentContent: modelData.content
-                        messageData: root.messageData
-                        done: root.messageData?.done ?? false
-                        completed: modelData.completed ?? false
                     } }
                     DelegateChoice { roleValue: "text"; MessageTextBlock {
                         editing: root.editing

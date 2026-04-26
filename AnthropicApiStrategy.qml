@@ -26,10 +26,10 @@ ApiStrategy {
     }
 
     function buildAuthorizationHeader(apiKeyEnvVarName) {
-        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: prompt-caching-2024-07-31' -H 'anthropic-beta: output-thinking-2025-02-19'`
+        return `-H "x-api-key: $${apiKeyEnvVarName}" -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: prompt-caching-2024-07-31'`
     }
 
-    function buildRequestData(model, messages, systemPrompt, temperature, tools, pendingFilePath, thinkingEnabled, thinkingLevel) {
+    function buildRequestData(model, messages, systemPrompt, temperature, tools, pendingFilePath) {
         const anthropicMessages = [];
 
         for (let i = 0; i < messages.length; i++) {
@@ -118,14 +118,11 @@ ApiStrategy {
              }
         }
 
-        const budgets = [0, 8000, 32000];
-        const thinkingBudget = (thinkingEnabled && thinkingLevel > 0) ? budgets[Math.min(thinkingLevel, 2)] : 0;
-
         const requestData = {
             "model": model.model,
-            "max_tokens": thinkingBudget > 0 ? (thinkingBudget + 4096) : 8192,
+            "max_tokens": 8192,
             "messages": anthropicMessages,
-            "temperature": thinkingBudget > 0 ? 1 : temperature,
+            "temperature": temperature,
             "stream": true
         };
 
@@ -136,13 +133,6 @@ ApiStrategy {
                  cachedTools[cachedTools.length - 1].cache_control = {"type": "ephemeral"};
             }
             requestData["tools"] = cachedTools;
-        }
-
-        if (thinkingBudget > 0) {
-            requestData["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": thinkingBudget
-            };
         }
 
         if (systemPrompt && systemPrompt.length > 0) {
@@ -267,26 +257,6 @@ ApiStrategy {
             return {};
         }
 
-        if (json.type === "content_block_delta" && json.delta?.type === "thinking_delta") {
-            const thought = json.delta.thinking ?? "";
-            if (thought.length > 0) {
-                if (!message._thinkOpen) {
-                    message.rawContent += "<think>";
-                    message._thinkOpen = true;
-                }
-                message.rawContent += thought;
-            }
-            return {};
-        }
-
-        if (json.type === "content_block_start" && json.content_block?.type === "text") {
-            if (message._thinkOpen) {
-                message.rawContent += "</think>\n";
-                message._thinkOpen = false;
-            }
-            return {};
-        }
-
         if (json.type === "message_delta") {
             const outputTokens = json.usage?.output_tokens ?? 0;
             return {
@@ -309,11 +279,6 @@ ApiStrategy {
     }
 
     function onRequestFinished(message) {
-        // Close any unclosed thinking block (e.g. stream cut off mid-thought)
-        if (message._thinkOpen) {
-            message.rawContent += "</think>\n";
-            message._thinkOpen = false;
-        }
         return { finished: false };
     }
 }

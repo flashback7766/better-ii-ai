@@ -213,11 +213,6 @@ Item {
             description: Translation.tr("Markdown test"),
             execute: () => {
                 Ai.addMessage(`
-<think>
-A longer think block to test revealing animation
-OwO wem ipsum dowo sit amet, consekituwet awipiscing ewit, sed do eiuwsmod tempow inwididunt ut wabowe et dowo mawa. Ut enim ad minim weniam, quis nostwud exeucitation uwuwamcow bowowis nisi ut awiquip ex ea commowo consequat. Duuis aute iwuwe dowo in wepwependewit in wowuptate velit esse ciwwum dowo eu fugiat nuwa pawiatuw. Excepteuw sint occaecat cupidatat non pwowoident, sunt in cuwpa qui officia desewunt mowit anim id est wabowum. Meouw! >w<
-Mowe uwu wem ipsum!
-</think>
 ## ✏️ Markdown test
 ### Formatting
 
@@ -269,9 +264,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
     function handleInput(inputText) {
         if (inputText.startsWith(root.commandPrefix)) {
             // Handle special commands
-            const command = inputText.split(" ")[0].substring(1);
-            const args = inputText.split(" ").slice(1);
-            const commandObj = root.allCommands.find(cmd => cmd.name === `${command}`);
+            const parts = inputText.trim().split(/\s+/);
+            const command = parts[0].substring(root.commandPrefix.length);
+            const args = parts.slice(1);
+            const commandObj = root.allCommands.find(cmd => cmd.name === command);
             if (commandObj) {
                 commandObj.execute(args);
             } else {
@@ -357,7 +353,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 480
+        width: 240
         readonly property real maxPopupHeight: 300
         readonly property real naturalHeight: modelPickerColumn.implicitHeight + 16
         implicitHeight: Math.min(naturalHeight, maxPopupHeight)
@@ -562,13 +558,18 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     }
 
                     // Divider
-                    Rectangle {
+                    RowLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 6
-                        Layout.rightMargin: 6
-                        implicitHeight: 1
-                        color: Appearance.colors.colOutlineVariant
-                        opacity: 0.5
+                        Layout.topMargin: 4
+                        spacing: 8
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 6
+                            Layout.rightMargin: 6
+                            implicitHeight: 1
+                            color: Appearance.colors.colOutlineVariant
+                            opacity: 0.5
+                        }
                     }
                 }
 
@@ -622,8 +623,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                     Layout.fillWidth: true; 
                                     font.pixelSize: Appearance.font.pixelSize.small + 2; 
                                     font.weight: Font.SemiBold; 
-                                    color: Appearance.m3colors.m3onSurface
-                                    opacity: parent.parent.parent.toggled ? 1.0 : 0.85
+                                    color: parent.parent.parent.toggled ? Appearance.m3colors.m3onPrimaryContainer : Appearance.m3colors.m3onSurface
+                                    opacity: 1.0
                                     text: Ai.models[modelData]?.name ?? modelData; 
                                     elide: Text.ElideRight 
                                 }
@@ -662,7 +663,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         function open() {
             modelPickerPopup.close();
             var pos = functionsButton.mapToItem(root, 0, 0);
-            x = pos.x - (width - functionsButton.width); // Right-align to button
+            x = pos.x - (width - functionsButton.width) + 30; // Shifted right from right-aligned state
             y = pos.y - implicitHeight - 6;
             // Clamp to not go off-screen left/right
             if (x < 6) x = 6;
@@ -697,7 +698,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 320
+        width: 400
         implicitHeight: functionsPopupColumn.implicitHeight + 16
         clip: true
         radius: Appearance.rounding.large ?? 16
@@ -773,8 +774,8 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 Layout.maximumWidth: 280
                                 font.pixelSize: Appearance.font.pixelSize.small + 2
                                 font.weight: Font.SemiBold
-                                color: Appearance.m3colors.m3onSurface
-                                opacity: parent.parent.parent.toggled ? 1.0 : 0.85
+                                color: parent.parent.parent.toggled ? Appearance.m3colors.m3onPrimaryContainer : Appearance.m3colors.m3onSurface
+                                opacity: 1.0
                                 text: modelData === "functions" ? Translation.tr("All Tools") : 
                                       modelData === "search" ? Translation.tr("Search Only") : 
                                       Translation.tr("No Tools")
@@ -797,188 +798,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
             }
 
-            // --- Divider ---
-            Rectangle {
-                visible: Ai.currentThinkingStyle !== ""
-                Layout.fillWidth: true
-                Layout.leftMargin: 8
-                Layout.rightMargin: 8
-                Layout.topMargin: 4
-                Layout.bottomMargin: 4
-                implicitHeight: 1
-                color: Appearance.colors.colOutlineVariant
-                opacity: 0.5
-            }
-
-            // --- Thinking Section ---
-            ColumnLayout {
-                visible: Ai.currentThinkingStyle !== ""
-                Layout.fillWidth: true
-                spacing: 6
-
-                // Anthropic Style (Adaptive Thinking)
-                ColumnLayout {
-                    visible: Ai.currentThinkingStyle === "anthropic"
-                    Layout.fillWidth: true
-                    spacing: 4
-
-                    StyledText {
-                        Layout.leftMargin: 6
-                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                        font.weight: Font.SemiBold
-                        color: Appearance.m3colors.m3primary
-                        text: Translation.tr("Reasoning Mode")
-                    }
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 38
-                        radius: Appearance.rounding.normal
-                        color: Appearance.colors.colLayer2
-                        border.width: 1
-                        border.color: Appearance.colors.colOutlineVariant
-
-                        RowLayout {
-                            anchors.fill: parent; anchors.margins: 4; spacing: 4
-                            Repeater {
-                                model: [
-                                    { label: Translation.tr("Off"),    l: 0, tip: Translation.tr("No extended thinking") },
-                                    { label: Translation.tr("Normal"), l: 1, tip: Translation.tr("Extended thinking\n~8k token budget") },
-                                    { label: Translation.tr("Max"),    l: 2, tip: Translation.tr("Maximum extended thinking\n~32k token budget") }
-                                ]
-                                delegate: RippleButton {
-                                    Layout.fillWidth: true; Layout.fillHeight: true
-                                    buttonRadius: Appearance.rounding.small
-                                    property bool isActive: Ai.thinkingLevel === modelData.l
-                                    colBackground: isActive ? Appearance.m3colors.m3primary : "transparent"
-                                    colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Qt.alpha(Appearance.colors.colLayer2Hover, 0.5)
-                                    onClicked: {
-                                        Ai.thinkingLevel = modelData.l;
-                                        Ai.thinkingEnabled = modelData.l > 0;
-                                        Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
-                                        Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
-                                    }
-                                    contentItem: StyledText {
-                                        anchors.centerIn: parent
-                                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                                        font.weight: parent.isActive ? Font.SemiBold : Font.Normal
-                                        color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
-                                        text: modelData.label
-                                        Behavior on color { ColorAnimation { duration: 150 } }
-                                    }
-                                    StyledToolTip { text: modelData.tip; extraVisibleCondition: false; alternativeVisibleCondition: parent.hovered }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Gemini Style (Levels)
-                ColumnLayout {
-                    visible: Ai.currentThinkingStyle === "gemini"
-                    Layout.fillWidth: true
-                    spacing: 4
-                    StyledText {
-                        Layout.leftMargin: 6
-                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                        font.weight: Font.SemiBold
-                        color: Appearance.m3colors.m3primary
-                        text: Translation.tr("Reasoning Level")
-                    }
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 38
-                        radius: Appearance.rounding.normal
-                        color: Appearance.colors.colLayer2
-                        border.width: 1
-                        border.color: Appearance.colors.colOutlineVariant
-
-                        RowLayout {
-                            anchors.fill: parent; anchors.margins: 4; spacing: 4
-                            Repeater {
-                                model: [
-                                    {label: Translation.tr("Off"),  l:0, tip: Translation.tr("No extended thinking")},
-                                    {label: Translation.tr("Low"),  l:1, tip: Translation.tr("Low thinking budget")},
-                                    {label: Translation.tr("Med"),  l:2, tip: Translation.tr("Medium thinking budget")},
-                                    {label: Translation.tr("High"), l:3, tip: Translation.tr("Maximum thinking budget")}
-                                ]
-                                delegate: RippleButton {
-                                    Layout.fillWidth: true; Layout.fillHeight: true
-                                    buttonRadius: Appearance.rounding.small
-                                    property bool isActive: Ai.thinkingLevel === modelData.l
-                                    colBackground: isActive ? Appearance.m3colors.m3primary : "transparent"
-                                    colBackgroundHover: isActive ? Appearance.m3colors.m3primary : Qt.alpha(Appearance.colors.colLayer2Hover, 0.5)
-                                    onClicked: {
-                                        Ai.thinkingLevel = modelData.l; Ai.thinkingEnabled = modelData.l > 0;
-                                        Ai.savePersistentState("thinkingEnabled", Ai.thinkingEnabled);
-                                        Ai.savePersistentState("thinkingLevel", Ai.thinkingLevel);
-                                    }
-                                    contentItem: StyledText {
-                                        anchors.centerIn: parent
-                                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                                        font.weight: parent.isActive ? Font.SemiBold : Font.Normal
-                                        color: parent.isActive ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
-                                        text: modelData.label
-                                        Behavior on color { ColorAnimation { duration: 150 } }
-                                    }
-                                    StyledToolTip { text: modelData.tip; extraVisibleCondition: false; alternativeVisibleCondition: parent.hovered }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Global Settings Section ---
-            Rectangle {
-                Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 8
-                Layout.topMargin: 2; Layout.bottomMargin: 2
-                implicitHeight: 1; color: Appearance.colors.colOutlineVariant; opacity: 0.5
-            }
-
-            RowLayout {
-                Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12
-                spacing: 12
-
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: 0
-                    StyledText {
-                        font.pixelSize: Appearance.font.pixelSize.small + 2
-                        color: Appearance.m3colors.m3onSurface
-                        text: Translation.tr("Auto-confirm")
-                    }
-                    StyledText {
-                        font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                        color: Appearance.colors.colSubtext
-                        text: Translation.tr("Run shell commands automatically")
-                    }
-                }
-
-                Item { Layout.fillWidth: true }
-
-                Rectangle {
-                    width: 44; height: 24; radius: 12
-                    color: Ai.functionsAutoConfirm ? Appearance.m3colors.m3primary : Appearance.colors.colLayer1
-                    border.width: 1
-                    border.color: Ai.functionsAutoConfirm ? Appearance.m3colors.m3primary : Appearance.colors.colOutlineVariant
-                    Behavior on color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
-
-                    Rectangle {
-                        width: 18; height: 18; radius: 9
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: Ai.functionsAutoConfirm ? parent.width - width - 3 : 3
-                        color: Ai.functionsAutoConfirm ? Appearance.m3colors.m3onPrimary : Appearance.colors.colSubtext
-                        Behavior on x { animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this) }
-                        Behavior on color { animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this) }
-                    }
-                    MouseArea {
-                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            Ai.functionsAutoConfirm = !Ai.functionsAutoConfirm;
-                            Ai.savePersistentState("functionsAutoConfirm", Ai.functionsAutoConfirm);
-                        }
-                    }
-                }
-            }
 
             RowLayout {
                 Layout.fillWidth: true; Layout.leftMargin: 8; Layout.rightMargin: 12; Layout.bottomMargin: 6
@@ -994,7 +813,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     StyledText {
                         font.pixelSize: Appearance.font.pixelSize.smaller + 2
                         color: Appearance.colors.colSubtext
-                        text: Translation.tr("Save credits by reusing context (Claude)")
+                        text: Translation.tr("Save credits by reusing context (Claude/Gemini)")
                     }
                 }
 
@@ -1020,6 +839,20 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             Ai.savePersistentState("promptCaching", Ai.promptCaching);
                         }
                     }
+                }
+            }
+
+            // --- Debug Section ---
+            Rectangle {
+                Layout.fillWidth: true; implicitHeight: 1
+                color: Appearance.colors.colOutlineVariant; opacity: 0.3
+            }
+            RowLayout {
+                Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.bottomMargin: 4
+                StyledText {
+                    text: "DEBUG: Model=[" + Ai.currentModelId + "]"
+                    font.pixelSize: 10
+                    color: "gray"
                 }
             }
         }
@@ -1164,7 +997,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         id: statusBarRow2
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 10
-                        visible: Ai.generationSpeed > 0 || Ai.sessionCost > 0.0001 || Ai.sessionSummary.length > 0 || Ai.functionsAutoConfirm
+                        visible: Ai.generationSpeed > 0 || Ai.sessionCost > 0.0001 || Ai.sessionSummary.length > 0
 
                         StatusItem {
                             visible: Ai.generationSpeed > 0
@@ -1173,7 +1006,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             description: Translation.tr("Generation speed (tokens/sec)")
                         }
                         StatusSeparator {
-                            visible: Ai.generationSpeed > 0 && (Ai.sessionCost > 0.0001 || Ai.sessionSummary.length > 0 || Ai.functionsAutoConfirm)
+                            visible: Ai.generationSpeed > 0 && (Ai.sessionCost > 0.0001 || Ai.sessionSummary.length > 0)
                         }
                         StatusItem {
                             visible: Ai.sessionCost > 0.0001
@@ -1182,22 +1015,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             description: Translation.tr("Estimated session cost (accumulated)")
                         }
                         StatusSeparator {
-                            visible: Ai.sessionCost > 0.0001 && (Ai.sessionSummary.length > 0 || Ai.functionsAutoConfirm)
+                            visible: Ai.sessionCost > 0.0001 && Ai.sessionSummary.length > 0
                         }
                         StatusItem {
                             visible: Ai.sessionSummary.length > 0
                             icon: "history_edu"
                             statusText: Translation.tr("Condensed")
                             description: Translation.tr("History has been semantically condensed to save space.\n\nSummary:\n%1").arg(Ai.sessionSummary)
-                        }
-                        StatusSeparator {
-                            visible: Ai.sessionSummary.length > 0 && Ai.functionsAutoConfirm
-                        }
-                        StatusItem {
-                            visible: Ai.functionsAutoConfirm
-                            icon: "bolt"
-                            statusText: Translation.tr("Auto")
-                            description: Translation.tr("⚠️ Auto-confirm is ON\nShell commands run without approval.\nDisable in the ⚙ Functions menu.")
                         }
                     }
                 }
@@ -1820,37 +1644,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             color: Appearance.m3colors.m3onSurface
                             text: Ai.currentTool.charAt(0).toUpperCase() + Ai.currentTool.slice(1)
                             elide: Text.ElideRight
-                        }
-                        // Show thinking indicator inline if active
-                        Rectangle {
-                            visible: {
-                                const style = Ai.currentThinkingStyle;
-                                return (style === "anthropic" && Ai.thinkingEnabled && Ai.thinkingLevel > 0)
-                                    || (style === "gemini" && Ai.thinkingLevel > 0);
-                            }
-                            width: thinkingInlineLabel.implicitWidth + 6
-                            height: thinkingInlineLabel.implicitHeight + 2
-                            radius: Appearance.rounding.small
-                            color: Appearance.m3colors.m3primary
-                            opacity: 0.8
-                            StyledText {
-                                id: thinkingInlineLabel
-                                anchors.centerIn: parent
-                                font.pixelSize: Appearance.font.pixelSize.smaller - 2
-                                color: Appearance.m3colors.m3onPrimary
-                                text: {
-                                    const style = Ai.currentThinkingStyle;
-                                    if (style === "anthropic") {
-                                        const labels = ["", "Norm", "Max"];
-                                        return "T:" + (labels[Ai.thinkingLevel] ?? "");
-                                    }
-                                    if (style === "gemini") {
-                                        const labels = ["", "L", "M", "H"];
-                                        return "T:" + labels[Ai.thinkingLevel];
-                                    }
-                                    return "";
-                                }
-                            }
                         }
                         MaterialSymbol {
                             text: "expand_more"

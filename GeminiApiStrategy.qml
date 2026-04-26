@@ -10,11 +10,12 @@ ApiStrategy {
     property string buffer: ""
     
     function buildEndpoint(model: AiModel): string {
-        const result = model.endpoint + `?key=\$\{${root.apiKeyEnvVarName}\}`
+        const result = model.endpoint + `?key=\$\{${apiKeyEnvVarName}\}`
         return result;
     }
 
-    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string, thinkingEnabled: bool, thinkingLevel: int) {
+    function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
+        console.log("[AI] Gemini Request Start: " + model.model);
         let contents = messages.map(message => {
             const geminiApiRoleName = (message.role === "assistant") ? "model" : message.role;
             const usingSearch = tools[0]?.google_search !== undefined
@@ -26,19 +27,9 @@ ApiStrategy {
                         "parts": message.functionCallParts
                     }
                 }
-                // Fallback: reconstruct parts with thought_signature
-                const part = {
-                    functionCall: { "name": message.functionName }
-                };
-                // Use saved signature, or skip validator as last resort (loaded chats)
-                if (message.thoughtSignature) {
-                    part.thought_signature = message.thoughtSignature;
-                } else {
-                    part.thought_signature = "skip_thought_signature_validator";
-                }
                 return {
                     "role": geminiApiRoleName,
-                    "parts": [part]
+                    "parts": [{ functionCall: { "name": message.functionName, "args": message.functionCall?.args ?? {} } }]
                 }
             }
             if (!usingSearch && message.functionResponse != undefined && message.functionName.length > 0) {
@@ -55,7 +46,7 @@ ApiStrategy {
             return {
                 "role": geminiApiRoleName,
                 "parts": [
-                    { text: message.rawContent },
+                    { text: message.rawContent || " " },
                     // Inline binary data (images, etc)
                     ...(message.fileBase64 && message.fileBase64.length > 0 ? [{
                         "inline_data": {
@@ -85,28 +76,44 @@ ApiStrategy {
                 }
             });
         }
-        // Gemini 3 uses thinking_level (string), not thinking_budget (number)
-        // Levels: minimal=off-ish, low, medium, high
-        const geminiThinkingLevels = ["MINIMAL", "LOW", "MEDIUM", "HIGH"];
-        const thinkingLevelStr = (thinkingEnabled && thinkingLevel > 0)
-            ? geminiThinkingLevels[Math.min(thinkingLevel, 3)]
-            : null;
-
+        
         let generationConfig = {
-            "temperature": temperature
+            "temperature": temperature,
+            "topP": 0.95,
+            "topK": 40,
+            "maxOutputTokens": 8192,
         };
-        if (thinkingLevelStr) {
-            generationConfig["thinking_config"] = { "thinking_level": thinkingLevelStr };
+
+        // Gemini requires alternating roles (user, model, user, model).
+        let alternatingContents = [];
+        if (contents.length > 0) {
+            let lastRole = "";
+            for (let i = 0; i < contents.length; i++) {
+                if (contents[i].role === lastRole && alternatingContents.length > 0) {
+                    alternatingContents[alternatingContents.length - 1].parts = 
+                        alternatingContents[alternatingContents.length - 1].parts.concat(contents[i].parts);
+                } else {
+                    alternatingContents.push(contents[i]);
+                    lastRole = contents[i].role;
+                }
+            }
         }
-        let baseData = {
-            "contents": contents,
-            "tools": tools && tools.length > 0 ? tools : undefined,
-            "system_instruction": {
-                "parts": [{ text: systemPrompt }]
-            },
-            "generationConfig": generationConfig,
+
+        const requestData = {
+            "contents": alternatingContents,
+            "generationConfig": generationConfig
         };
-        return model.extraParams ? Object.assign({}, baseData, model.extraParams) : baseData;
+
+        if (systemPrompt && systemPrompt.length > 0) {
+            requestData.system_instruction = { "parts": [{ "text": systemPrompt }] };
+        }
+
+        if (tools && tools.length > 0) {
+            requestData.tools = tools;
+        }
+
+        print("[AI] Gemini Request: " + alternatingContents.length + " messages");
+        return model.extraParams ? Object.assign({}, requestData, model.extraParams) : requestData;
     }
 
     function buildAuthorizationHeader(apiKeyEnvVarName: string): string {
@@ -114,24 +121,36 @@ ApiStrategy {
     }
 
     function parseResponseLine(line, message) {
-        if (line.startsWith("[")) {
-            buffer += line.slice(1).trim();
-        } else if (line === "]") {
-            buffer += line.slice(0, -1).trim();
-            return parseBuffer(message);
-        } else if (line.startsWith(",")) {
-            return parseBuffer(message);
-        } else {
-            buffer += line.trim();
-        }
-        return {};
+        let cleanLine = line.trim();
+        if (cleanLine.length === 0) return {};
+        
+        // Accumulate line to buffer
+        buffer += cleanLine;
+        
+        // Try to parse what we have.
+        return parseBuffer(message, true);
     }
 
-    function parseBuffer(message) {
+    function parseBuffer(message, isPartial = false) {
+        if (buffer.length === 0) return {};
+        
+        // Clean up the buffer to attempt parsing a single JSON object
+        let workBuffer = buffer.trim();
+        
+        // Strip array brackets and commas if they are at the very edges
+        if (workBuffer.startsWith("[")) workBuffer = workBuffer.slice(1).trim();
+        if (workBuffer.startsWith(",")) workBuffer = workBuffer.slice(1).trim();
+        if (workBuffer.endsWith("]")) workBuffer = workBuffer.slice(0, -1).trim();
+        if (workBuffer.endsWith(",")) workBuffer = workBuffer.slice(0, -1).trim();
+        
+        if (workBuffer.length === 0) return {};
+
         let finished = false;
         try {
-            if (buffer.length === 0) return {};
-            const dataJson = JSON.parse(buffer);
+            const dataJson = JSON.parse(workBuffer);
+            // If parsing succeeded, it means we got a complete JSON object.
+            // Clear the MAIN buffer.
+            buffer = ""; 
 
             // Uploaded file (legacy File API)
             if (dataJson.uploadedFile) {
@@ -159,7 +178,6 @@ ApiStrategy {
             if (dataJson.error) {
                 const errorMsg = `**Error ${dataJson.error.code}**: ${dataJson.error.message}`;
                 message.rawContent += errorMsg;
-                message.content += errorMsg;
                 return { finished: true };
             }
 
@@ -167,14 +185,33 @@ ApiStrategy {
             if (!dataJson.candidates) return {};
 
             // Finished?
-            if (dataJson.candidates[0]?.finishReason) {
+            if (dataJson.candidates[0]?.finishReason && dataJson.candidates[0]?.finishReason !== "STOP") {
                 finished = true;
             }
 
             const parts = dataJson.candidates[0]?.content?.parts;
             if (!parts || parts.length === 0) return { finished: finished };
 
-            // Find functionCall part (use for-loop, .find() unreliable in QML)
+            // Find and process parts
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (!part) continue;
+
+                // Handle text parts
+                const text = part.text || "";
+                if (text && text.length > 0) {
+                    message.rawContent += text;
+                }
+                
+                // Handle thinking/reasoning parts (Gemini 3.1 Pro might use 'thought')
+                // We keep it invisible as requested, but we could log it for debug
+                const thought = part.thought || "";
+                if (thought && thought.length > 0) {
+                    console.log("[AI] Gemini Thought: " + thought);
+                }
+            }
+
+            // Find functionCall part
             let functionCallPart = null;
             for (let i = 0; i < parts.length; i++) {
                 if (parts[i] && parts[i].functionCall) {
@@ -186,94 +223,27 @@ ApiStrategy {
                 const functionCall = functionCallPart.functionCall;
                 message.functionName = functionCall.name;
                 message.functionCall = { name: functionCall.name, args: functionCall.args ?? {} };
-                // Save full parts including thought_signature for correct history replay
                 message.functionCallParts = parts;
-                // Also save thought_signature separately for fallback (e.g. loaded chats)
-                const sig = functionCallPart.thought_signature ?? functionCallPart.thoughtSignature ?? null;
-                if (sig) message.thoughtSignature = sig;
-                // Only add to rawContent (for API context), NOT to content (for UI)
                 const rawEntry = `\n\n[[ Function: ${functionCall.name}(${JSON.stringify(functionCall.args)}) ]]\n`;
                 message.rawContent += rawEntry;
-                // Don't touch message.content — handleFunctionCall will add the UI representation
                 return { functionCall: { name: functionCall.name, args: functionCall.args }, finished: finished };
             }
 
-            // Find thinking/thought parts
-            for (let i = 0; i < parts.length; i++) {
-                const part = parts[i];
-                if (part && (part.thought || part.thought_signature || part.thinking)) {
-                    const thoughtText = part.text || part.thought || part.thinking || "";
-                    if (thoughtText.length > 0) {
-                        if (!message._thinkOpen) {
-                            message.rawContent += "<think>";
-                            message._thinkOpen = true;
-                        }
-                        message.rawContent += thoughtText;
-                    }
-                }
-            }
-
-            // Find text part
-            let textPart = null;
-            for (let i = 0; i < parts.length; i++) {
-                if (parts[i] && parts[i].text !== undefined && parts[i].text !== null && !parts[i].thought && !parts[i].thinking) {
-                    textPart = parts[i];
-                    break;
-                }
-            }
-            if (!textPart && !message._thinkOpen) return { finished: finished };
-
-            // Close thought block if we moved to text
-            if (textPart && message._thinkOpen) {
-                message.rawContent += "</think>\n";
-                message._thinkOpen = false;
-            }
-
-            // Normal text response
-            const responseContent = textPart ? textPart.text : "";
-            message.rawContent += responseContent;
-
-            // Handle annotations and metadata
-            const annotationSources = dataJson.candidates[0]?.groundingMetadata?.groundingChunks?.map(chunk => {
-                return {
-                    "type": "url_citation",
-                    "text": chunk?.web?.title,
-                    "url": chunk?.web?.uri,
-                }
-            }) ?? [];
-
-            const annotations = dataJson.candidates[0]?.groundingMetadata?.groundingSupports?.map(citation => {
-                return {
-                    "type": "url_citation",
-                    "start_index": citation.segment?.startIndex,
-                    "end_index": citation.segment?.endIndex,
-                    "text": citation?.segment.text,
-                    "url": annotationSources[citation.groundingChunkIndices[0]]?.url,
-                    "sources": citation.groundingChunkIndices
-                }
-            });
-            message.annotationSources = annotationSources;
-            message.annotations = annotations;
-            message.searchQueries = dataJson.candidates[0]?.groundingMetadata?.webSearchQueries ?? [];
-
-            // Usage metadata
+            // Token Usage
             if (dataJson.usageMetadata) {
                 return {
                     tokenUsage: {
                         input: dataJson.usageMetadata.promptTokenCount ?? -1,
                         output: dataJson.usageMetadata.candidatesTokenCount ?? -1,
                         total: dataJson.usageMetadata.totalTokenCount ?? -1,
-                        cacheRead: dataJson.usageMetadata.cachedContentTokenCount ?? 0
                     },
                     finished: finished
                 };
             }
 
         } catch (e) {
-            // Don't dump raw buffer to UI — just log
-            console.log("[AI] Gemini: Could not parse buffer: ", e);
-        } finally {
-            buffer = "";
+            // Only log errors if we're not in the middle of a partial line
+            if (!isPartial) console.log("[AI] Gemini: Could not parse buffer: ", e);
         }
         return { finished: finished };
     }
@@ -281,7 +251,7 @@ ApiStrategy {
     function onRequestFinished(message) {
         const result = parseBuffer(message);
         if (message._thinkOpen) {
-            message.rawContent += "</think>\n";
+            message.rawContent += "\n</think>\n\n";
             message._thinkOpen = false;
         }
         return result;
