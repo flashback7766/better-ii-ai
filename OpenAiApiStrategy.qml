@@ -16,8 +16,12 @@ ApiStrategy {
                     // Tool result message — must use role "tool" with tool_call_id
                     if (message.role === "user" && message.functionName && message.functionName.length > 0) {
                         let toolCallId = null;
-                        if (i > 0 && messages[i - 1].functionCall && messages[i - 1].functionCall.id) {
-                            toolCallId = messages[i - 1].functionCall.id;
+                        const prev = i > 0 ? messages[i - 1] : null;
+                        if (prev?.functionCall?.id) {
+                            toolCallId = prev.functionCall.id;
+                        } else if (prev?.functionName) {
+                            // Mirror the synthetic ID generated for the assistant tool_call below
+                            toolCallId = "call_" + prev.functionName + "_" + (i - 1);
                         }
                         if (toolCallId) {
                             return {
@@ -26,7 +30,7 @@ ApiStrategy {
                                 "content": message.functionResponse || ""
                             };
                         }
-                        // Fallback for local models without IDs: send as plain user text
+                        // Fallback when there's no preceding assistant tool call: send as plain user text
                         return {
                             "role": "user",
                             "content": `[[ Output of ${message.functionName} ]]:\n${message.functionResponse || ""}`
@@ -35,10 +39,11 @@ ApiStrategy {
                     // Assistant tool call message — emit tool_calls structure
                     if (message.role === "assistant" && message.functionName && message.functionName.length > 0) {
                         const textOnly = message.rawContent ? message.rawContent.split("\n\n[[ Function:")[0] : "";
+                        // Synthetic IDs include `i` to stay unique when the same tool is called twice.
                         const result = {
                             "role": "assistant",
                             "tool_calls": [{
-                                "id": message.functionCall?.id || ("call_" + message.functionName),
+                                "id": message.functionCall?.id || ("call_" + message.functionName + "_" + i),
                                 "type": "function",
                                 "function": {
                                     "name": message.functionName,

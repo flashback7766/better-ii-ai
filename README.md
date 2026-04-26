@@ -1,6 +1,6 @@
 # 🌌 Better II AI Sidebar
 
-A premium, agentic AI assistant sidebar for the Quickshell desktop environment. Built with QML and performance in mind, designed to master workflows through autonomous tool use and state-of-the-art reasoning.
+A premium, agentic AI assistant sidebar for the end-4/dots-hyprland desktop environment. Built with QML and performance in mind, designed to master workflows through autonomous tool use and state-of-the-art reasoning.
 
 > [!IMPORTANT]
 > **Status: Work In Progress (WIP)**

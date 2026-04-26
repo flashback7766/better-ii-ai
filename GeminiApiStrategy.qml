@@ -16,9 +16,11 @@ ApiStrategy {
 
     function buildRequestData(model: AiModel, messages, systemPrompt: string, temperature: real, tools: list<var>, filePath: string) {
         console.log("[AI] Gemini Request Start: " + model.model);
+        // Google Search grounding is mutually exclusive with function calling, so the
+        // function-call/result branches below are skipped entirely when search is on.
+        const usingSearch = Array.isArray(tools) && tools.length > 0 && tools[0]?.google_search !== undefined;
         let contents = messages.map(message => {
             const geminiApiRoleName = (message.role === "assistant") ? "model" : message.role;
-            const usingSearch = tools[0]?.google_search !== undefined
             if (!usingSearch && message.functionCall != undefined && message.functionName.length > 0) {
                 // Use saved parts (includes thought_signature from API response)
                 if (message.functionCallParts && message.functionCallParts.length > 0) {
@@ -184,8 +186,9 @@ ApiStrategy {
             // No candidates?
             if (!dataJson.candidates) return {};
 
-            // Finished?
-            if (dataJson.candidates[0]?.finishReason && dataJson.candidates[0]?.finishReason !== "STOP") {
+            // Finished? Any non-empty finishReason means the model is done with
+            // this turn (STOP for normal completion, plus SAFETY/MAX_TOKENS/etc).
+            if (dataJson.candidates[0]?.finishReason) {
                 finished = true;
             }
 
@@ -249,12 +252,7 @@ ApiStrategy {
     }
 
     function onRequestFinished(message) {
-        const result = parseBuffer(message);
-        if (message._thinkOpen) {
-            message.rawContent += "\n</think>\n\n";
-            message._thinkOpen = false;
-        }
-        return result;
+        return parseBuffer(message);
     }
     
     function reset() {

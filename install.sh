@@ -107,9 +107,18 @@ echo "  ✅ RippleButton.qml    → $WIDGETS_DIR/RippleButton.qml"
 if [ -f "$SCRIPT_DIR/ii-Default.md" ]; then
     PROMPTS_DIR="$QS_BASE/defaults/ai/prompts"
     mkdir -p "$PROMPTS_DIR"
-    cp "$PROMPTS_DIR/ii-Default.md" "$BACKUP/" 2>/dev/null || true
+    # Mirror the install path under $BACKUP so `cp -r $BACKUP/* $QS_BASE/` rolls back correctly
+    mkdir -p "$BACKUP/defaults/ai/prompts"
+    cp "$PROMPTS_DIR/ii-Default.md" "$BACKUP/defaults/ai/prompts/" 2>/dev/null || true
     cp "$SCRIPT_DIR/ii-Default.md" "$PROMPTS_DIR/ii-Default.md"
     echo "  ✅ ii-Default.md       → $PROMPTS_DIR/ii-Default.md"
+fi
+
+# Clean up files removed in this version (older installs might still have them).
+if [ -f "$SIDEBAR_AI/MessageThinkBlock.qml" ]; then
+    cp "$SIDEBAR_AI/MessageThinkBlock.qml" "$BACKUP/modules/ii/sidebarLeft/aiChat/" 2>/dev/null || true
+    rm -f "$SIDEBAR_AI/MessageThinkBlock.qml"
+    echo "  🧹 Removed stale MessageThinkBlock.qml (think rendering moved into TextBlock)"
 fi
 
 # Install custom icons
@@ -133,7 +142,7 @@ echo "   Escape          — Close popups / stop generation"
 echo "   Ctrl+1..9       — Quick model switch"
 echo "   Ctrl+Shift+O    — New chat (keybind)"
 echo ""
-echo "📌 Models: Gemini 3.1 Flash-Lite/Flash/Pro, Claude Haiku/Sonnet/Opus 4.7,"
+echo "📌 Models: Gemini 3.1 Flash-Lite/Flash/Pro, Claude 4.5/4.6/4.7 (Haiku/Sonnet/Opus),"
 echo "           GPT-5.4 Nano/Mini/Full + Ollama auto-detect + /addlocal"
 echo ""
 echo "💡 Recommendation: Gemini models are highly recommended for the best experience!"
@@ -142,10 +151,10 @@ echo "📌 Features:"
 echo ""
 echo "   • Scrollable model picker with smooth animations"
 echo "   • Function calling: shell commands, config editing, web search"
-echo "   • Auto context trimming at ~15K tokens (adaptive for Claude)"
+echo "   • Auto context compression at ~32K tokens (semantic summary)"
 echo "   • Chat history rotation (5 slots)"
 echo "   • Session cost tracking"
 echo ""
 echo "📌 Add {PREVIOUS_CHAT_CONTEXT} to system prompt for cross-chat context"
 echo ""
-echo "📌 To rollback: cp -r $BACKUP/* $QS_BASE/"
+echo "📌 To rollback: cp -r \"$BACKUP\"/* \"$QS_BASE\"/"

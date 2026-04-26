@@ -119,7 +119,7 @@ Singleton {
 
     function idForMessage(message) {
         // Generate a unique ID using high-res timestamp and random entropy
-        return Date.now().toString(36) + "-" + Math.random().toString(36).substr(2, 12);
+        return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 14);
     }
 
     function safeModelName(modelName) {
@@ -730,8 +730,8 @@ Singleton {
             delete root.messageByID[id];
         }
         
-        root.messageIDs.splice(startIndex, count);
-        root.messageIDs = [...root.messageIDs];
+        // Reassign with a fresh array so QML's binding system observes the change.
+        root.messageIDs = root.messageIDs.slice(0, startIndex).concat(root.messageIDs.slice(startIndex + count));
         root.saveChat("lastSession");
     }
 
@@ -969,7 +969,8 @@ Singleton {
         
         // SECURITY HARDENING: Use in-memory bash heredoc for summarizer to protect API keys.
         const curlCmd = `curl -s "${endpoint}" -H "Content-Type: application/json" --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(summarizerData))}'`;
-        const bashCommand = `bash <<'EOP_SUMMARIZER'\nexport ${root.apiKeyEnvVarName}='${apiKey}'\n${curlCmd}\nEOP_SUMMARIZER\n`;
+        const escapedApiKey = CF.StringUtils.shellSingleQuoteEscape(apiKey);
+        const bashCommand = `bash <<'EOP_SUMMARIZER'\nexport ${root.apiKeyEnvVarName}='${escapedApiKey}'\n${curlCmd}\nEOP_SUMMARIZER\n`;
         
         root.condensing = true;
         summarizerProc.countToRemove = countToRemove;

@@ -48,20 +48,14 @@ Rectangle {
         const children = messageContentColumnLayout.children;
         for (let i = 0; i < children.length; i++) {
             const child = children[i];
-            // segmentContent is present on MessageCodeBlock, MessageTextBlock, MessageThinkBlock
-            // Items without it (e.g. the loading indicator) are skipped
             if (child["segmentContent"] === undefined) continue;
             const content = child["segmentContent"] ?? "";
-            const lang = child["segmentLang"];        // Only MessageCodeBlock has this
-            const isCmd = child["isCommandRequest"];  // Only MessageCodeBlock has this
-            const isThink = child["completed"] !== undefined && child["segmentLang"] === undefined;
+            const lang = child["segmentLang"];
+            const isCmd = child["isCommandRequest"];
             if (lang !== undefined) {
-                if (isCmd) continue; // Command blocks are not user-editable
+                if (isCmd) continue;
                 const cleanCode = content.replace(/\n+$/, "");
                 newContent += "```" + (lang ?? "") + "\n" + cleanCode + "\n```";
-            } else if (isThink) {
-                // Think blocks: preserve as-is (not edited by user)
-                newContent += content + "\n";
             } else {
                 newContent += content;
             }
@@ -361,7 +355,7 @@ Rectangle {
                         segmentContent: modelData.content
                         messageData: root.messageData
                         done: root.messageData?.done ?? false
-                        forceDisableChunkSplitting: root.messageData?.content.includes("```") ?? true
+                        forceDisableChunkSplitting: /```\w*\n/.test(root.messageData?.content ?? "")
                     } }
                 }
             }

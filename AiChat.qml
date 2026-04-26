@@ -71,6 +71,14 @@ Item {
             name: "model",
             description: Translation.tr("Choose model"),
             execute: args => {
+                if (args.length === 0 || !args[0]) {
+                    Ai.addMessage(Translation.tr("Usage: %1model MODEL_NAME").arg(root.commandPrefix), Ai.interfaceRole);
+                    return;
+                }
+                if (Ai.modelList.indexOf(args[0]) < 0) {
+                    Ai.addMessage(Translation.tr("Unknown model: '%1'. Use /model with one of: %2").arg(args[0]).arg(Ai.modelList.join(", ")), Ai.interfaceRole);
+                    return;
+                }
                 Ai.setModel(args[0]);
             }
         },
@@ -199,13 +207,20 @@ Item {
             name: "temp",
             description: Translation.tr("Set temperature (randomness) of the model. Values range between 0 to 2 for Gemini, 0 to 1 for other models. Default is 0.5."),
             execute: args => {
-                // console.log(args)
                 if (args.length == 0 || args[0] == "get") {
                     Ai.printTemperature();
-                } else {
-                    const temp = parseFloat(args[0]);
-                    Ai.setTemperature(temp);
+                    return;
                 }
+                const temp = parseFloat(args[0]);
+                if (isNaN(temp)) {
+                    Ai.addMessage(Translation.tr("Invalid temperature: '%1'. Must be a number in [0, 2].").arg(args[0]), Ai.interfaceRole);
+                    return;
+                }
+                if (temp < 0 || temp > 2) {
+                    Ai.addMessage(Translation.tr("Temperature %1 out of range. Must be in [0, 2].").arg(temp), Ai.interfaceRole);
+                    return;
+                }
+                Ai.setTemperature(temp);
             }
         },
         {
@@ -1090,7 +1105,6 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     required property var modelData
                     required property int index
                     messageIndex: index
-                    // BUGFIX: was missing `return`, so messageData was always undefined
                     messageData: Ai.messageByID[modelData] ?? null
 
                     property var prevMessageData: index > 0 ? Ai.messageByID[messageListView.model.values[index - 1]] : null
@@ -1277,6 +1291,29 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
 
                         background: null
 
+                        // Chat history navigation (Up/Down when suggestions popup is not visible).
+                        // _historyIndex: -1 means "not navigating, current text is the user's live draft".
+                        // 0..n-1 walks backwards through prior user messages (0 = most recent).
+                        property int _historyIndex: -1
+                        property string _historyDraft: ""
+
+                        function _userPromptHistory() {
+                            const ids = Ai.messageIDs || [];
+                            const out = [];
+                            for (let i = ids.length - 1; i >= 0; i--) {
+                                const m = Ai.messageByID ? Ai.messageByID[ids[i]] : null;
+                                if (m && m.role === "user" && typeof m.content === "string" && m.content.length > 0) {
+                                    out.push(m.content);
+                                }
+                            }
+                            return out;
+                        }
+
+                        function _resetHistoryNav() {
+                            _historyIndex = -1;
+                            _historyDraft = "";
+                        }
+
                         onTextChanged: {
                             // Handle suggestions
                             if (messageInputField.text.length === 0) {
@@ -1392,6 +1429,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         function accept() {
                             root.handleInput(text);
                             text = "";
+                            _resetHistoryNav();
                         }
 
                         Keys.onPressed: event => {
@@ -1402,7 +1440,35 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 suggestions.selectedIndex = Math.max(0, suggestions.selectedIndex - 1);
                                 event.accepted = true;
                             } else if (event.key === Qt.Key_Down && suggestions.visible) {
-                                suggestions.selectedIndex = Math.min(root.suggestionList.length - 1, suggestions.selectedIndex + 1);
+                                suggestions.selectedIndex = Math.min(Math.max(0, root.suggestionList.length - 1), suggestions.selectedIndex + 1);
+                                event.accepted = true;
+                            } else if (event.key === Qt.Key_Up && event.modifiers === Qt.NoModifier) {
+                                // Walk back through prior user prompts
+                                const hist = messageInputField._userPromptHistory();
+                                if (hist.length === 0) { event.accepted = false; return; }
+                                if (messageInputField._historyIndex === -1) {
+                                    messageInputField._historyDraft = messageInputField.text;
+                                }
+                                const next = Math.min(hist.length - 1, messageInputField._historyIndex + 1);
+                                if (next !== messageInputField._historyIndex) {
+                                    messageInputField._historyIndex = next;
+                                    messageInputField.text = hist[next];
+                                    messageInputField.cursorPosition = messageInputField.text.length;
+                                }
+                                event.accepted = true;
+                            } else if (event.key === Qt.Key_Down && event.modifiers === Qt.NoModifier) {
+                                // Come forward; at the end, restore the draft
+                                if (messageInputField._historyIndex < 0) { event.accepted = false; return; }
+                                const hist = messageInputField._userPromptHistory();
+                                const next = messageInputField._historyIndex - 1;
+                                messageInputField._historyIndex = next;
+                                if (next < 0) {
+                                    messageInputField.text = messageInputField._historyDraft;
+                                    messageInputField._historyDraft = "";
+                                } else {
+                                    messageInputField.text = hist[next];
+                                }
+                                messageInputField.cursorPosition = messageInputField.text.length;
                                 event.accepted = true;
                             } else if ((event.key === Qt.Key_Enter || event.key === Qt.Key_Return)) {
                                 if (event.modifiers & Qt.ShiftModifier) {
@@ -1445,8 +1511,14 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                                 event.accepted = false; // No image, let text pasting proceed
                             } else if (event.key === Qt.Key_Escape) {
-                                // Esc: abort generation if running, otherwise detach file
-                                if (Ai.isGenerating) {
+                                // Esc precedence: open popup -> abort generation -> detach file
+                                if (modelPickerPopup.isOpen) {
+                                    modelPickerPopup.close();
+                                    event.accepted = true;
+                                } else if (functionsPopup.isOpen) {
+                                    functionsPopup.close();
+                                    event.accepted = true;
+                                } else if (Ai.isGenerating) {
                                     Ai.abortAll();
                                     event.accepted = true;
                                 } else if (Ai.pendingFilePath.length > 0) {

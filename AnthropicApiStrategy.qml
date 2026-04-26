@@ -46,7 +46,7 @@ ApiStrategy {
                 }
                 contentArray.push({
                     "type": "tool_use",
-                    "id": msg.functionCall.id || ("toolu_" + Math.random().toString(36).substring(2)),
+                    "id": msg.functionCall.id || ("toolu_" + i + "_" + Math.random().toString(36).slice(2, 12)),
                     "name": msg.functionName,
                     "input": msg.functionCall.args || {}
                 });
@@ -57,7 +57,7 @@ ApiStrategy {
             // 2. Tool result message (only when a function name is actually present)
             if (msg.role === "user" && msg.functionName && msg.functionName.length > 0) {
                 let validToolUseId = null;
-                if (i > 0 && messages[i-1].functionCall && messages[i-1].functionCall.id) {
+                if (i > 0 && messages[i-1]?.functionCall?.id) {
                     validToolUseId = messages[i-1].functionCall.id;
                 }
 
@@ -110,11 +110,18 @@ ApiStrategy {
         }
 
         if (Ai.promptCaching && anthropicMessages.length >= 4) {
-             // Cache the 4th message from the end (approx) to keep a large chunk cached
+             // Cache the 4th message from the end (approx) to keep a large chunk cached.
+             // Anthropic's cache_control must sit on a text/image/tool_result/tool_use block;
+             // pin to the last text block when possible, otherwise the last block.
              const cacheIndex = anthropicMessages.length - 4;
              const msg = anthropicMessages[cacheIndex];
              if (Array.isArray(msg.content) && msg.content.length > 0) {
-                 msg.content[msg.content.length - 1].cache_control = {"type": "ephemeral"};
+                 let target = -1;
+                 for (let bi = msg.content.length - 1; bi >= 0; bi--) {
+                     if (msg.content[bi]?.type === "text") { target = bi; break; }
+                 }
+                 if (target < 0) target = msg.content.length - 1;
+                 msg.content[target].cache_control = {"type": "ephemeral"};
              }
         }
 
