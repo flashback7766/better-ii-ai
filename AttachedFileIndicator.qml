@@ -129,7 +129,7 @@ Rectangle {
                 StyledImage {
                     id: imagePreview
                     anchors.fill: parent
-                    source: root.filePath.startsWith("file://") ? root.filePath : ("file://" + root.filePath)
+                    source: root.filePath === "" ? "" : (root.filePath.startsWith("file://") ? root.filePath : ("file://" + root.filePath))
                     fillMode: Image.PreserveAspectFit
                     antialiasing: true
                     width: root.imageWidth * root.scale

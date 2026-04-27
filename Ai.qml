@@ -32,12 +32,15 @@ Singleton {
     signal responseFinished()
 
     property bool isGenerating: requester.running || commandExecutionProc.running
+    property bool aborted: false
     property string previousChatSummary: ""
     property string sessionSummary: "" // Accumulated summary of compressed conversation
     property bool condensing: false // Indicates background summarization is active
     readonly property string summarizerModelId: "gemini-3.1-flash-lite"
 
     function abortAll() {
+        // Mark aborted so onExited handlers don't auto-restart the conversation
+        root.aborted = true;
         // Kill any running AI processes
         if (commandExecutionProc.running) {
             commandExecutionProc.running = false;
@@ -136,7 +139,8 @@ Singleton {
         "{DATETIME}": `${DateTime.time}, ${DateTime.collapsedCalendarFormat}`,
         "{WINDOWCLASS}": ToplevelManager.activeToplevel?.appId ?? "Unknown",
         "{DE}": `${SystemInfo.desktopEnvironment} (${SystemInfo.windowingSystem})`,
-        "{PREVIOUS_CHAT_CONTEXT}": root.previousChatSummary.length > 0 ? `\n\n## Previous conversation context\n${root.previousChatSummary}` : ""
+        "{PREVIOUS_CHAT_CONTEXT}": root.previousChatSummary.length > 0 ? `\n\n## Previous conversation context\n${root.previousChatSummary}` : "",
+        "{PREVIOUS_CHAT_HISTORY}": root.previousChatSummary.length > 0 ? `\n\n## Previous conversation context\n${root.previousChatSummary}` : ""
     }
 
     // Gemini: https://ai.google.dev/gemini-api/docs/function-calling
@@ -871,22 +875,37 @@ Singleton {
     function newChat() {
         // Save current chat to rotating slot (only if there's actual content)
         if (root.messageIDs.length > 1) {
+            // Capture transcript BEFORE clearing — the summary timer may not have fired yet
+            let transcript = "";
+            for (let i = 0; i < root.messageIDs.length; i++) {
+                const msg = root.messageByID[root.messageIDs[i]];
+                if (!msg || msg.role === root.interfaceRole) continue;
+                const role = msg.role === "user" ? "User" : "Assistant";
+                transcript += `${role}: ${msg.rawContent}\n`;
+            }
+            const slotName = `history_${root.chatHistoryIndex % root.chatHistorySlots}`;
             try {
-                const slotName = `history_${root.chatHistoryIndex % root.chatHistorySlots}`;
                 root.saveChat(slotName);
                 root.chatHistoryIndex = (root.chatHistoryIndex + 1) % root.chatHistorySlots;
                 root.savePersistentState("historyIndex", root.chatHistoryIndex)
             } catch (e) {
                 console.log("[AI] newChat: could not save to history:", e);
             }
+            // Force a fresh summary for the slot we just archived to (background)
+            if (transcript.length > 50) {
+                root.generateMemorySummary(slotName, transcript);
+            }
         }
-        // Always clear regardless of save success
+        // Cancel pending idle-summary; the cleared chat has nothing to summarize
+        memorySummaryTimer.stop();
         // Destroy all message QML objects to free memory
         for (let i = 0; i < root.messageIDs.length; i++) {
             const msg = root.messageByID[root.messageIDs[i]];
             if (msg && msg.destroy) msg.destroy();
         }
         root.clearMessages();
+        // Persist the cleared state so a restart doesn't reload the old chat
+        root.saveChat("lastSession");
         // Reload summaries from all history slots
         root.loadRecentChatSummaries();
     }
@@ -1078,7 +1097,12 @@ Singleton {
         }
     }
 
-    Process { id: saveSummaryProc }
+    Process {
+        id: saveSummaryProc
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0) root.loadRecentChatSummaries();
+        }
+    }
 
     function generateMemorySummary(chatName, transcript) {
         if (backgroundMemoryProc.running) return;
@@ -1158,6 +1182,8 @@ Singleton {
         }
 
         function makeRequest() {
+            // A fresh request clears any prior abort state
+            root.aborted = false;
             // Start generation timer
             root.generationStartTime = Date.now();
             root.generationSpeed = 0;
@@ -1463,7 +1489,6 @@ Singleton {
             // Low level disk access
             /dd\s+.*of=\/dev\//,
             /\bmkfs\b/,
-            /\bformat\b/,
             // System control
             /\breboot\b/,
             /\bshutdown\b/,
@@ -1514,6 +1539,7 @@ Singleton {
             const baseContent = commandExecutionProc.assistantMessage.contentBeforeCommand ?? commandExecutionProc.assistantMessage.content;
             commandExecutionProc.assistantMessage.content = baseContent + `\n\n\`\`\`command\n$ ${cmdName} ${exitLabel}\n${lastLines}\n\`\`\``;
             commandExecutionProc.collectedOutput = "";
+            if (root.aborted) { root.aborted = false; return; }
             requester.makeRequest();
         }
     }
@@ -1536,6 +1562,7 @@ Singleton {
                 : Translation.tr("No results found for \"%1\".").arg(webSearchProc.query);
             root.addFunctionOutputMessage(webSearchProc.functionName, response);
             webSearchProc.collectedOutput = "";
+            if (root.aborted) { root.aborted = false; return; }
             requester.makeRequest();
         }
     }
@@ -1593,11 +1620,10 @@ Singleton {
 
             const dangerous = root.isDangerousCommand(args.command);
             if (dangerous) {
-                message.content += "\n\n" + Translation.tr("❌ **Command blocked**: This command is considered dangerous and cannot be executed automatically.");
-                message.functionPending = false;
-                addFunctionOutputMessage(name, "Error: Command rejected due to safety policy.");
-                requester.makeRequest(); // Notify model of rejection
+                // Dangerous: warn and leave the Approve/Reject buttons up for the user
+                message.content += "\n\n" + Translation.tr("⚠️ **Potentially dangerous command** — review carefully before approving.");
             } else {
+                // Safe: auto-execute
                 root.approveCommand(message);
             }
         } else {

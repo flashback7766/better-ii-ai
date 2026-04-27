@@ -10,7 +10,6 @@ import Quickshell
 Rectangle {
     id: root
     property int messageIndex
-    property string modelData
     property var messageData
     property var messageInputField
 
@@ -22,18 +21,7 @@ Rectangle {
     property bool editing: false
     property bool isContinuation: false
 
-    // Cached markdown block parsing — only re-parse when content actually changes
-    property string _lastParsedContent: ""
-    property list<var> _cachedBlocks: []
-    property list<var> messageBlocks: {
-        const content = root.messageData?.content ?? "";
-        if (content === root._lastParsedContent && root._cachedBlocks.length > 0) {
-            return root._cachedBlocks;
-        }
-        root._lastParsedContent = content;
-        root._cachedBlocks = StringUtils.splitMarkdownBlocks(content);
-        return root._cachedBlocks;
-    }
+    property list<var> messageBlocks: StringUtils.splitMarkdownBlocks(root.messageData?.content ?? "")
 
     anchors.left: parent?.left
     anchors.right: parent?.right

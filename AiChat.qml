@@ -293,7 +293,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         }
 
         // Always scroll to bottom when user sends a message
-        messageListView.positionViewAtEnd();
+        if (messageListView.isNearBottom) messageListView.positionViewAtEnd();
     }
 
     // Click-away overlay to close popups when clicking outside
@@ -461,7 +461,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     Layout.leftMargin: 12
                     Layout.topMargin: 2
                     font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                    font.weight: Font.SemiBold
+                    font.weight: Font.DemiBold
                     color: Appearance.m3colors.m3primary
                     text: Translation.tr("Select Model")
                 }
@@ -490,7 +490,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             implicitHeight: 52
                             buttonRadius: Appearance.rounding.normal
                             toggled: Ai.currentModelId === modelData
-                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
+                            colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.85) : "transparent"
                             colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                             onClicked: {
                                 if (pendingDelete) { pendingDelete = false; return; }
@@ -525,21 +525,21 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 0
-                                    StyledText { 
-                                        Layout.fillWidth: true; 
-                                        font.pixelSize: Appearance.font.pixelSize.small + 2; 
-                                        font.weight: Font.SemiBold; 
-                                        color: Appearance.m3colors.m3onSurface
+                                    StyledText {
+                                        Layout.fillWidth: true;
+                                        font.pixelSize: Appearance.font.pixelSize.small + 2;
+                                        font.weight: Font.DemiBold;
+                                        color: parent.parent.parent.toggled ? Appearance.m3colors.m3onPrimaryContainer : Appearance.m3colors.m3onSurface
                                         opacity: parent.parent.parent.toggled ? 1.0 : 0.85
-                                        text: Ai.models[modelData]?.name ?? modelData; 
-                                        elide: Text.ElideRight 
+                                        text: Ai.models[modelData]?.name ?? modelData;
+                                        elide: Text.ElideRight
                                     }
-                                    StyledText { 
-                                        Layout.fillWidth: true; 
-                                        font.pixelSize: Appearance.font.pixelSize.smaller + 1; 
-                                        color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3primary, 0.7) : Appearance.colors.colSubtext; 
-                                        text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; 
-                                        elide: Text.ElideRight 
+                                    StyledText {
+                                        Layout.fillWidth: true;
+                                        font.pixelSize: Appearance.font.pixelSize.smaller + 1;
+                                        color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3onPrimaryContainer, 0.75) : Appearance.colors.colSubtext;
+                                        text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? "";
+                                        elide: Text.ElideRight
                                     }
                                 }
                                 MaterialSymbol {
@@ -607,7 +607,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         implicitHeight: 52
                         buttonRadius: Appearance.rounding.normal
                         toggled: Ai.currentModelId === modelData
-                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
+                        colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.85) : "transparent"
                         colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                         onClicked: { Ai.setModel(modelData, false); modelPickerPopup.close(); }
                         contentItem: RowLayout {
@@ -634,21 +634,21 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 0
-                                StyledText { 
-                                    Layout.fillWidth: true; 
-                                    font.pixelSize: Appearance.font.pixelSize.small + 2; 
-                                    font.weight: Font.SemiBold; 
+                                StyledText {
+                                    Layout.fillWidth: true;
+                                    font.pixelSize: Appearance.font.pixelSize.small + 2;
+                                    font.weight: Font.DemiBold;
                                     color: parent.parent.parent.toggled ? Appearance.m3colors.m3onPrimaryContainer : Appearance.m3colors.m3onSurface
                                     opacity: 1.0
-                                    text: Ai.models[modelData]?.name ?? modelData; 
-                                    elide: Text.ElideRight 
+                                    text: Ai.models[modelData]?.name ?? modelData;
+                                    elide: Text.ElideRight
                                 }
-                                StyledText { 
-                                    Layout.fillWidth: true; 
-                                    font.pixelSize: Appearance.font.pixelSize.smaller + 1; 
-                                    color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3primary, 0.7) : Appearance.colors.colSubtext; 
-                                    text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? ""; 
-                                    elide: Text.ElideRight 
+                                StyledText {
+                                    Layout.fillWidth: true;
+                                    font.pixelSize: Appearance.font.pixelSize.smaller + 1;
+                                    color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3onPrimaryContainer, 0.75) : Appearance.colors.colSubtext;
+                                    text: (Ai.models[modelData]?.description ?? "").split("\n")[0] ?? "";
+                                    elide: Text.ElideRight
                                 }
                             }
                             MaterialSymbol {
@@ -741,7 +741,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 Layout.leftMargin: 4
                 Layout.topMargin: 2
                 font.pixelSize: Appearance.font.pixelSize.smaller + 2
-                font.weight: Font.SemiBold
+                font.weight: Font.DemiBold
                 color: Appearance.m3colors.m3primary
                 text: Translation.tr("Tool Mode")
             }
@@ -754,7 +754,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     implicitHeight: 52
                     buttonRadius: Appearance.rounding.normal
                     toggled: Ai.currentTool === modelData
-                    colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.4) : "transparent"
+                    colBackground: toggled ? Qt.alpha(Appearance.m3colors.m3primaryContainer, 0.85) : "transparent"
                     colBackgroundHover: Qt.alpha(Appearance.colors.colLayer2Hover, 0.8)
                     onClicked: {
                         Ai.setTool(modelData);
@@ -788,7 +788,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 Layout.fillWidth: true
                                 Layout.maximumWidth: 280
                                 font.pixelSize: Appearance.font.pixelSize.small + 2
-                                font.weight: Font.SemiBold
+                                font.weight: Font.DemiBold
                                 color: parent.parent.parent.toggled ? Appearance.m3colors.m3onPrimaryContainer : Appearance.m3colors.m3onSurface
                                 opacity: 1.0
                                 text: modelData === "functions" ? Translation.tr("All Tools") : 
@@ -799,10 +799,10 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             StyledText {
                                 Layout.fillWidth: true
                                 font.pixelSize: Appearance.font.pixelSize.smaller + 1
-                                color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3primary, 0.75) : Appearance.colors.colSubtext
+                                color: parent.parent.parent.toggled ? Qt.alpha(Appearance.m3colors.m3onPrimaryContainer, 0.85) : Appearance.colors.colSubtext
                                 text: (Ai.toolDescriptions[modelData] ?? "").split("\n")[0] ?? ""
                                 elide: Text.ElideRight
-                                opacity: 0.8
+                                opacity: parent.parent.parent.toggled ? 1.0 : 0.8
                             }
                         }
                         MaterialSymbol {
@@ -1068,6 +1068,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 property bool initialLoadDone: false
                 // Only auto-scroll if user is near the bottom (within 150px)
                 property bool isNearBottom: (contentHeight - contentY - height) < 150
+                onContentYChanged: isNearBottom = (contentHeight - contentY - height) < 150
 
                 Component.onCompleted: Qt.callLater(() => { initialLoadDone = true; })
 
@@ -1087,12 +1088,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     if (atYEnd) userScrolledUp = false;
                 }
 
-                // Smooth fade+slide pop-in for new messages
+                // Smooth fade-in for new messages — no y animation: ListView's `from: 14`
+                // is a literal content-y, which made the new delegate fly from the top of
+                // the chat down to its natural position, momentarily overlaying every
+                // message it passed through.
                 add: Transition {
-                    ParallelAnimation {
-                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.OutCubic }
-                        NumberAnimation { property: "y"; from: 14; duration: 220; easing.type: Easing.OutCubic }
-                    }
+                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.OutCubic }
                 }
 
                 model: ScriptModel {
