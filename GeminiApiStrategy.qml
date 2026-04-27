@@ -125,34 +125,104 @@ ApiStrategy {
     function parseResponseLine(line, message) {
         let cleanLine = line.trim();
         if (cleanLine.length === 0) return {};
-        
+
         // Accumulate line to buffer
         buffer += cleanLine;
-        
+
         // Try to parse what we have.
         return parseBuffer(message, true);
     }
 
+    /**
+     * Find the first complete top-level JSON object inside `text`. Returns
+     * { object: parsed-or-null, end: index-past-its-closing-brace, broken: bool }.
+     * Skips leading array tokens / commas / whitespace. `broken` means the input
+     * starts with `{` but the matching `}` hasn't arrived yet (caller should keep
+     * accumulating).
+     */
+    function _firstJsonObject(text) {
+        let i = 0;
+        const n = text.length;
+        while (i < n) {
+            const c = text[i];
+            if (c === ' ' || c === '\n' || c === '\r' || c === '\t' || c === ',' || c === '[' || c === ']') { i++; continue; }
+            break;
+        }
+        if (i >= n) return { object: null, end: i, broken: false };
+        if (text[i] !== '{') {
+            // Junk we don't recognise — drop one char and keep looking
+            return { object: null, end: i + 1, broken: false };
+        }
+        const start = i;
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (; i < n; i++) {
+            const ch = text[i];
+            if (escaped) { escaped = false; continue; }
+            if (ch === '\\') { escaped = true; continue; }
+            if (ch === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (ch === '{') depth++;
+            else if (ch === '}') {
+                depth--;
+                if (depth === 0) { i++; break; }
+            }
+        }
+        if (depth !== 0) return { object: null, end: start, broken: true };
+        const slice = text.slice(start, i);
+        try {
+            return { object: JSON.parse(slice), end: i, broken: false };
+        } catch (e) {
+            // Malformed — skip past it
+            return { object: null, end: i, broken: false };
+        }
+    }
+
     function parseBuffer(message, isPartial = false) {
         if (buffer.length === 0) return {};
-        
-        // Clean up the buffer to attempt parsing a single JSON object
-        let workBuffer = buffer.trim();
-        
-        // Strip array brackets and commas if they are at the very edges
-        if (workBuffer.startsWith("[")) workBuffer = workBuffer.slice(1).trim();
-        if (workBuffer.startsWith(",")) workBuffer = workBuffer.slice(1).trim();
-        if (workBuffer.endsWith("]")) workBuffer = workBuffer.slice(0, -1).trim();
-        if (workBuffer.endsWith(",")) workBuffer = workBuffer.slice(0, -1).trim();
-        
-        if (workBuffer.length === 0) return {};
 
+        // Drain every complete top-level object. Combine their effects so a single
+        // call to parseResponseLine handling N objects still reports the strongest
+        // signal back to Ai.qml (functionCall > finished > tokenUsage > content).
+        let combined = {};
+        let progressed = true;
+        while (progressed) {
+            progressed = false;
+            const found = _firstJsonObject(buffer);
+            if (found.broken) {
+                // Wait for more bytes
+                buffer = buffer.slice(found.end);
+                break;
+            }
+            if (found.end > 0) {
+                const dataJson = found.object;
+                buffer = buffer.slice(found.end);
+                progressed = true;
+                if (dataJson) {
+                    const r = _processJsonObject(dataJson, message);
+                    combined = _mergeResult(combined, r);
+                }
+            }
+        }
+        return combined;
+    }
+
+    function _mergeResult(a, b) {
+        if (!b) return a;
+        const out = Object.assign({}, a);
+        // functionCall trumps everything (drives the next turn)
+        if (b.functionCall) out.functionCall = b.functionCall;
+        if (b.tokenUsage) out.tokenUsage = b.tokenUsage;
+        if (b.errorCode !== undefined) out.errorCode = b.errorCode;
+        // `finished` is sticky — once any object reports it we stay finished
+        if (b.finished) out.finished = true;
+        return out;
+    }
+
+    function _processJsonObject(dataJson, message) {
         let finished = false;
         try {
-            const dataJson = JSON.parse(workBuffer);
-            // If parsing succeeded, it means we got a complete JSON object.
-            // Clear the MAIN buffer.
-            buffer = ""; 
 
             // Uploaded file (legacy File API)
             if (dataJson.uploadedFile) {
@@ -183,8 +253,23 @@ ApiStrategy {
                 return { finished: true, errorCode: dataJson.error.code };
             }
 
+            // Usage metadata can arrive in a chunk on its own (no candidates) — extract first
+            // so the final cost/speed numbers aren't dropped.
+            const usageMetadata = dataJson.usageMetadata;
+
             // No candidates?
-            if (!dataJson.candidates) return {};
+            if (!dataJson.candidates) {
+                if (usageMetadata) {
+                    return {
+                        tokenUsage: {
+                            input: usageMetadata.promptTokenCount ?? -1,
+                            output: usageMetadata.candidatesTokenCount ?? -1,
+                            total: usageMetadata.totalTokenCount ?? -1,
+                        }
+                    };
+                }
+                return {};
+            }
 
             // Finished? Any non-empty finishReason means the model is done with
             // this turn (STOP for normal completion, plus SAFETY/MAX_TOKENS/etc).
@@ -233,20 +318,19 @@ ApiStrategy {
             }
 
             // Token Usage
-            if (dataJson.usageMetadata) {
+            if (usageMetadata) {
                 return {
                     tokenUsage: {
-                        input: dataJson.usageMetadata.promptTokenCount ?? -1,
-                        output: dataJson.usageMetadata.candidatesTokenCount ?? -1,
-                        total: dataJson.usageMetadata.totalTokenCount ?? -1,
+                        input: usageMetadata.promptTokenCount ?? -1,
+                        output: usageMetadata.candidatesTokenCount ?? -1,
+                        total: usageMetadata.totalTokenCount ?? -1,
                     },
                     finished: finished
                 };
             }
 
         } catch (e) {
-            // Only log errors if we're not in the middle of a partial line
-            if (!isPartial) console.log("[AI] Gemini: Could not parse buffer: ", e);
+            console.log("[AI] Gemini: Could not process JSON object: ", e);
         }
         return { finished: finished };
     }
@@ -279,8 +363,9 @@ ApiStrategy {
     }
 
     function finalizeScriptContent(scriptContent: string): string {
+        // Use split/join to replace ALL occurrences (QML JS lacks String.replaceAll)
         return scriptContent
-            .replace(fileMimeTypeSubstitutionString, `'"\$${fileMimeTypeVarName}"'`)
-            .replace(fileUriSubstitutionString, `'"\$${fileUriVarName}"'`);
+            .split(fileMimeTypeSubstitutionString).join(`'"\$${fileMimeTypeVarName}"'`)
+            .split(fileUriSubstitutionString).join(`'"\$${fileUriVarName}"'`);
     }
 }

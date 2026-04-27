@@ -41,9 +41,17 @@ Singleton {
     function abortAll() {
         // Mark aborted so onExited handlers don't auto-restart the conversation
         root.aborted = true;
+        // Cancel any pending retry so makeRequest doesn't fire after the user aborted
+        if (retryTimer.running) retryTimer.stop();
+        if (requester.retryPending) requester.retryPending = false;
+        // Drop any deferred follow-up turn that handleFunctionCall queued mid-stream
+        requester.dispatchAfterExit = false;
         // Kill any running AI processes
         if (commandExecutionProc.running) {
             commandExecutionProc.running = false;
+        }
+        if (webSearchProc.running) {
+            webSearchProc.running = false;
         }
         if (requester.running) {
             requester.running = false;
@@ -112,11 +120,12 @@ Singleton {
         "gpt-5.4": [2.50, 15.00],
     })
 
-    function calculateCost(modelId, inputTokens, outputTokens, cacheReadTokens = 0) {
+    function calculateCost(modelId, inputTokens, outputTokens, cacheReadTokens = 0, cacheWriteTokens = 0) {
         const pricing = root.modelPricing[modelId];
         if (!pricing) return 0;
-        // Prompt caching read is usually 10% of base price
-        const effectiveInput = (inputTokens - cacheReadTokens) + (cacheReadTokens * 0.1);
+        // Anthropic input_tokens already excludes cached tokens, so we don't subtract cacheRead.
+        // Prompt cache reads ~10% of base price; cache writes ~1.25× base price.
+        const effectiveInput = inputTokens + (cacheReadTokens * 0.1) + (cacheWriteTokens * 1.25);
         return (effectiveInput * pricing[0] + outputTokens * pricing[1]) / 1000000;
     }
 
@@ -712,8 +721,11 @@ Singleton {
             "done": true,
         });
         const id = idForMessage(aiMessage);
-        root.messageIDs = [...root.messageIDs, id];
+        // Set the map entry BEFORE pushing the id — reassigning messageIDs fires the
+        // ScriptModel signal synchronously, and delegates would bind messageData to
+        // Ai.messageByID[id] before the entry exists, ending up stuck on null.
         root.messageByID[id] = aiMessage;
+        root.messageIDs = [...root.messageIDs, id];
         root.saveChat("lastSession");
     }
 
@@ -898,11 +910,7 @@ Singleton {
         }
         // Cancel pending idle-summary; the cleared chat has nothing to summarize
         memorySummaryTimer.stop();
-        // Destroy all message QML objects to free memory
-        for (let i = 0; i < root.messageIDs.length; i++) {
-            const msg = root.messageByID[root.messageIDs[i]];
-            if (msg && msg.destroy) msg.destroy();
-        }
+        // clearMessages() destroys all message QML objects internally
         root.clearMessages();
         // Persist the cleared state so a restart doesn't reload the old chat
         root.saveChat("lastSession");
@@ -911,6 +919,11 @@ Singleton {
     }
 
     function resetSessionState() {
+        // Destroy any live message objects to avoid leaking QML instances
+        for (let i = 0; i < root.messageIDs.length; i++) {
+            const msg = root.messageByID[root.messageIDs[i]];
+            if (msg && msg.destroy) msg.destroy();
+        }
         root.messageIDs = [];
         root.messageByID = ({});
         root.sessionSummary = "";
@@ -969,6 +982,8 @@ Singleton {
     }
 
     function performSemanticSummary(transcript, countToRemove) {
+        // Don't stack summarizer requests — wait for the in-flight one to finish
+        if (summarizerProc.running || root.condensing) return;
         const model = models[root.summarizerModelId];
         if (!model) {
             console.log("[AI] Summarizer model not found");
@@ -1086,8 +1101,10 @@ Singleton {
                     const response = JSON.parse(backgroundMemoryProc.buffer);
                     const newSummary = response.candidates[0]?.content?.parts[0]?.text;
                     if (newSummary && newSummary.length > 0) {
-                        const fileContent = newSummary.trim().replace(/'/g, "'\\''");
-                        saveSummaryProc.command = ["bash", "-c", `echo '${fileContent}' > ${Directories.aiChats}/${backgroundMemoryProc.chatName}.summary.txt`];
+                        const fileContent = CF.StringUtils.shellSingleQuoteEscape(newSummary.trim());
+                        const safeChatName = CF.StringUtils.shellSingleQuoteEscape(backgroundMemoryProc.chatName);
+                        const safeDir = CF.StringUtils.shellSingleQuoteEscape(String(Directories.aiChats).replace(/^file:\/\//, ""));
+                        saveSummaryProc.command = ["bash", "-c", `printf '%s' '${fileContent}' > '${safeDir}'/'${safeChatName}'.summary.txt`];
                         saveSummaryProc.running = true;
                     }
                 } catch (e) { console.log("[AI] Memory Summarizer parse error:", e); }
@@ -1116,7 +1133,8 @@ Singleton {
         if (!apiKey) return;
         
         const curlCmd = `curl -s "${endpoint}" -H "Content-Type: application/json" --data '${CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(requestData))}'`;
-        const bashCommand = `bash <<'EOP_MEMORY'\nexport ${root.apiKeyEnvVarName}='${apiKey}'\n${curlCmd}\nEOP_MEMORY\n`;
+        const escapedApiKey = CF.StringUtils.shellSingleQuoteEscape(apiKey);
+        const bashCommand = `bash <<'EOP_MEMORY'\nexport ${root.apiKeyEnvVarName}='${escapedApiKey}'\n${curlCmd}\nEOP_MEMORY\n`;
         
         backgroundMemoryProc.chatName = chatName;
         backgroundMemoryProc.command = ["bash", "-c", bashCommand];
@@ -1156,9 +1174,15 @@ Singleton {
         property int retryCount: 0
         readonly property int maxRetries: 3
         property bool retryPending: false
+        // Set when handleFunctionCall wants to dispatch the follow-up turn but the
+        // streaming process hasn't exited yet — drained in onExited.
+        property bool dispatchAfterExit: false
         property ApiStrategy currentStrategy
 
         function markDone() {
+            // Idempotent — strategies sometimes emit `finished:true` twice (e.g. Anthropic's
+            // message_delta then message_stop), and we don't want to double-charge cost.
+            if (requester.message?.done) return;
             requester.message.done = true;
             // Reset adaptive flush interval for next message
             streamFlushTimer.interval = 50;
@@ -1173,7 +1197,7 @@ Singleton {
             }
             // Calculate session cost
             if (root.tokenCount.input > 0) {
-                root.sessionCost += root.calculateCost(root.currentModelId, root.tokenCount.input, root.tokenCount.output, root.tokenCount.cacheRead);
+                root.sessionCost += root.calculateCost(root.currentModelId, root.tokenCount.input, root.tokenCount.output, root.tokenCount.cacheRead, root.tokenCount.cacheWrite);
             }
             if (root.postResponseHook) {
                 root.postResponseHook();
@@ -1185,8 +1209,16 @@ Singleton {
         }
 
         function makeRequest(retry = false) {
+            // Defer until the current streaming process exits — otherwise we'd reassign
+            // requester.message mid-stream and the trailing `finished:true` chunk would
+            // close the wrong (newly-created) message.
+            if (requester.running && !retry) {
+                requester.dispatchAfterExit = true;
+                return;
+            }
             if (!retry) requester.retryCount = 0;
             requester.retryPending = false;
+            requester.dispatchAfterExit = false;
             // A fresh request clears any prior abort state
             root.aborted = false;
             // Start generation timer
@@ -1247,8 +1279,11 @@ Singleton {
                     "done": false,
                 });
                 const id = idForMessage(requester.message);
-                root.messageIDs = [...root.messageIDs, id];
+                // map-first so the delegate's `Ai.messageByID[id]` binding is non-null
+                // the instant the ScriptModel sees the new id (mutating a `var`'s
+                // sub-property doesn't fire QML's property-change signal).
                 root.messageByID[id] = requester.message;
+                root.messageIDs = [...root.messageIDs, id];
             } else {
                 requester.message.rawContent = "";
                 requester.message.content = "";
@@ -1313,12 +1348,6 @@ Singleton {
                         return;
                     }
 
-                    if (result.functionCall) {
-                        // Flush content immediately before function call
-                        streamFlushTimer.flushNow();
-                        requester.message.functionCall = result.functionCall;
-                        root.handleFunctionCall(result.functionCall.name, result.functionCall.args, requester.message);
-                    }
                     if (result.tokenUsage) {
                         root.tokenCount.input = result.tokenUsage.input;
                         root.tokenCount.output = result.tokenUsage.output;
@@ -1326,7 +1355,19 @@ Singleton {
                         root.tokenCount.cacheRead = result.tokenUsage.cacheRead ?? 0;
                         root.tokenCount.cacheWrite = result.tokenUsage.cacheWrite ?? 0;
                     }
-                    if (result.finished) {
+                    if (result.functionCall) {
+                        // Flush content immediately before function call
+                        streamFlushTimer.flushNow();
+                        const callOwner = requester.message;
+                        callOwner.functionCall = result.functionCall;
+                        // The function call ends THIS turn — close it before dispatching, even if
+                        // the strategy also reports finished:true (which would otherwise close
+                        // the freshly-created next message instead).
+                        if (result.finished) {
+                            requester.markDone();
+                        }
+                        root.handleFunctionCall(result.functionCall.name, result.functionCall.args, callOwner);
+                    } else if (result.finished) {
                         streamFlushTimer.flushNow();
                         requester.markDone();
                     } else {
@@ -1345,10 +1386,16 @@ Singleton {
         onExited: (exitCode, exitStatus) => {
             streamFlushTimer.flushNow();
             const result = requester.currentStrategy.onRequestFinished(requester.message);
-            
+
             if (requester.retryPending) return;
 
-            if (result.finished) {
+            // Late functionCall (e.g. OpenAI tool call that didn't get a finish_reason chunk)
+            if (result && result.functionCall) {
+                const callOwner = requester.message;
+                callOwner.functionCall = result.functionCall;
+                requester.markDone();
+                root.handleFunctionCall(result.functionCall.name, result.functionCall.args, callOwner);
+            } else if (result && result.finished) {
                 requester.markDone();
             } else if (!requester.message.done) {
                 requester.markDone();
@@ -1371,6 +1418,15 @@ Singleton {
                 if (msg && msg.fileBase64 && msg.fileBase64.length > 0 && msg.done) {
                     msg.fileBase64 = ""; // Free memory, base64 data no longer needed
                 }
+            }
+
+            // Drain any deferred follow-up request (function-call tools that sync-dispatched
+            // mid-stream). Skip if the user aborted in the meantime.
+            if (requester.dispatchAfterExit && !root.aborted) {
+                requester.dispatchAfterExit = false;
+                Qt.callLater(() => requester.makeRequest());
+            } else {
+                requester.dispatchAfterExit = false;
             }
         }
     }
@@ -1457,6 +1513,12 @@ Singleton {
         if (messageIndex === -1) return;
         const message = root.messageByID[id];
         if (message.role !== "assistant") return;
+        // If the message being regenerated is the one currently streaming, abort the
+        // in-flight request first — otherwise removeMessagesRange destroys it under
+        // the live requester and onExited writes into a freed object.
+        if (requester.running && requester.message === message) {
+            root.abortAll();
+        }
         // Remove all messages after this one in bulk
         const countToRemove = root.messageIDs.length - messageIndex;
         root.removeMessagesRange(messageIndex, countToRemove);
@@ -1510,18 +1572,33 @@ Singleton {
         if (!cmd) return false;
         const dangerousPatterns = [
             // Deletion or modification of root/system dirs
-            /\brm\s+.*-rf?.*\s+\/(?:bin|boot|dev|etc|home|lib|lib64|lost\+found|mnt|opt|proc|root|run|sbin|srv|sys|tmp|usr|var|[^\w\-]|$)/,
+            /\brm\s+.*-[rfRF]+.*\s+\/(?:bin|boot|dev|etc|home|lib|lib64|lost\+found|mnt|opt|proc|root|run|sbin|srv|sys|tmp|usr|var|[^\w\-]|$)/,
             /\bmv\s+.*\s+\/(?:bin|boot|dev|etc|home|lib|lib64|lost\+found|mnt|opt|proc|root|run|sbin|srv|sys|tmp|usr|var|[^\w\-]|$)/,
             /\bchmod\s+.*-R.*\s+\/(?:bin|boot|dev|etc|home|lib|lib64|lost\+found|mnt|opt|proc|root|run|sbin|srv|sys|tmp|usr|var|[^\w\-]|$)/,
             /\bchown\s+.*-R.*\s+\/(?:bin|boot|dev|etc|home|lib|lib64|lost\+found|mnt|opt|proc|root|run|sbin|srv|sys|tmp|usr|var|[^\w\-]|$)/,
+            // Recursive delete of HOME / cwd / glob — covers `rm -rf ~`, `rm -rf $HOME`, `rm -rf .`, `rm -rf *`
+            /\brm\s+(?:-[a-zA-Z]*\s+)*-[rfRF]+[a-zA-Z]*(?:\s+-[a-zA-Z]+)*\s+(?:~|\$HOME|\$\{HOME\}|\.|\.\/|\*|\.\*)(?:\s|$)/,
+            /\brm\s+.*\s+(?:~|\$HOME|\$\{HOME\}|\*|\.\*)(?:\s|$)/,
             // Low level disk access
-            /dd\s+.*of=\/dev\//,
+            /\bdd\s+.*of=\/dev\//,
             /\bmkfs\b/,
+            // Writing to block devices directly
+            />\s*\/dev\/(?:sd[a-z]|nvme|hd[a-z]|mmcblk)/,
+            // Pipe-to-shell from network — classic supply-chain footgun
+            /\bcurl\b.*\|\s*(?:bash|sh|zsh|fish)\b/,
+            /\bwget\b.*\|\s*(?:bash|sh|zsh|fish)\b/,
+            // Fork bomb
+            /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,
             // System control
             /\breboot\b/,
             /\bshutdown\b/,
             /\bpoweroff\b/,
-            /\bhalt\b/
+            /\bhalt\b/,
+            // Destructive git
+            /\bgit\s+clean\s+.*-[a-zA-Z]*[fdx]/,
+            /\bgit\s+reset\s+.*--hard/,
+            /\bgit\s+push\s+.*--force\b/,
+            /\bgit\s+push\s+.*-f\b/
         ];
         return dangerousPatterns.some(pattern => pattern.test(cmd));
     }
@@ -1558,14 +1635,19 @@ Singleton {
             }
         }
         onExited: (exitCode, exitStatus) => {
-            commandExecutionProc.outputMessage.functionResponse += `[[ Command exited with code ${exitCode} (${exitStatus}) ]]\n`;
-            // Final UI update with exit code
-            const cmdName = commandExecutionProc.shellCommand;
-            const lines = commandExecutionProc.collectedOutput.trim().split("\n");
-            const lastLines = lines.slice(-5).join("\n");
-            const exitLabel = exitCode === 0 ? "✓" : `✗ exit ${exitCode}`;
-            const baseContent = commandExecutionProc.assistantMessage.contentBeforeCommand ?? commandExecutionProc.assistantMessage.content;
-            commandExecutionProc.assistantMessage.content = baseContent + `\n\n\`\`\`command\n$ ${cmdName} ${exitLabel}\n${lastLines}\n\`\`\``;
+            // The output/assistant messages may have been destroyed by clearMessages /
+            // abortAll while the process was running — guard every access.
+            if (commandExecutionProc.outputMessage) {
+                commandExecutionProc.outputMessage.functionResponse += `[[ Command exited with code ${exitCode} (${exitStatus}) ]]\n`;
+            }
+            if (commandExecutionProc.assistantMessage) {
+                const cmdName = commandExecutionProc.shellCommand;
+                const lines = commandExecutionProc.collectedOutput.trim().split("\n");
+                const lastLines = lines.slice(-5).join("\n");
+                const exitLabel = exitCode === 0 ? "✓" : `✗ exit ${exitCode}`;
+                const baseContent = commandExecutionProc.assistantMessage.contentBeforeCommand ?? commandExecutionProc.assistantMessage.content;
+                commandExecutionProc.assistantMessage.content = baseContent + `\n\n\`\`\`command\n$ ${cmdName} ${exitLabel}\n${lastLines}\n\`\`\``;
+            }
             commandExecutionProc.collectedOutput = "";
             if (root.aborted) { root.aborted = false; return; }
             requester.makeRequest();
@@ -1739,7 +1821,8 @@ Singleton {
                 // Use timestamp+index to avoid collision with live message IDs
                 return `loaded_${Date.now()}_${i}`;
             });
-            root.messageIDs = saveIds;
+            // Populate the map first; assigning messageIDs triggers the UI rebuild,
+            // and delegates need messageByID[id] to be live by then.
             for (let i = 0; i < saveData.length; i++) {
                 const message = saveData[i];
                 root.messageByID[saveIds[i]] = root.aiMessageComponent.createObject(root, {
@@ -1764,6 +1847,7 @@ Singleton {
                 if (message.functionCallParts) root.messageByID[saveIds[i]].functionCallParts = message.functionCallParts;
                 if (message.thoughtSignature) root.messageByID[saveIds[i]].thoughtSignature = message.thoughtSignature;
             }
+            root.messageIDs = saveIds;
         } catch (e) {
             console.log("[AI] Could not load chat: ", e);
         } finally {

@@ -180,7 +180,10 @@ ApiStrategy {
             const delta = dataJson.choices?.[0]?.delta;
             const finishReason = dataJson.choices?.[0]?.finish_reason;
 
-            // Accumulate tool call fragments and emit early for UI responsiveness
+            // Accumulate tool call fragments. Don't emit per-delta — handleFunctionCall
+            // is non-idempotent (it appends UI blocks, runs commands, fires makeRequest),
+            // so the function call is emitted exactly once when the stream finishes
+            // (finish_reason path below, or onRequestFinished as a fallback).
             if (delta?.tool_calls) {
                 for (let i = 0; i < delta.tool_calls.length; i++) {
                     const tc = delta.tool_calls[i];
@@ -188,18 +191,7 @@ ApiStrategy {
                     if (tc["function"]?.name) _toolCallName = tc["function"].name;
                     if (tc["function"]?.arguments) _toolCallArgs += tc["function"].arguments;
                 }
-                
-                // Emit early if we have a name, so the UI can show the block immediately
-                if (_toolCallName.length > 0) {
-                    let args = {};
-                    try { args = JSON.parse(_toolCallArgs); } catch(e) {
-                        // If partial JSON, try to extract command string if possible
-                        const cmdMatch = _toolCallArgs.match(/"command"\s*:\s*"([^"]*)"/);
-                        if (cmdMatch) args = { command: cmdMatch[1] };
-                    }
-                    const fc = { name: _toolCallName, args: args, id: _toolCallId };
-                    return { functionCall: fc, finished: false };
-                }
+                // Fall through so finish_reason in the same chunk still triggers the emit below.
             }
 
             // Emit tool call when finish_reason arrives (may be in a separate chunk)
@@ -216,7 +208,8 @@ ApiStrategy {
                 return { functionCall: fc, finished: false };
             }
 
-            if (delta?.tool_calls) return {};  // Still accumulating tool call fragments
+            // Still accumulating tool call fragments — no other deltas to process this chunk
+            if (delta?.tool_calls && !finishReason) return {};
 
             let newContent = "";
             const responseContent = delta?.content || dataJson.message?.content;

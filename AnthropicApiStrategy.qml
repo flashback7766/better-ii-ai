@@ -44,9 +44,15 @@ ApiStrategy {
                 if (textOnly.trim().length > 0) {
                     contentArray.push({ "type": "text", "text": textOnly });
                 }
+                // If the live message was loaded from disk (or built before the API gave us
+                // an id), persist a synthetic id back so the next user tool_result can find it.
+                if (!msg.functionCall.id) {
+                    const synthId = "toolu_" + i + "_" + Math.random().toString(36).slice(2, 12);
+                    msg.functionCall = Object.assign({}, msg.functionCall, { id: synthId });
+                }
                 contentArray.push({
                     "type": "tool_use",
-                    "id": msg.functionCall.id || ("toolu_" + i + "_" + Math.random().toString(36).slice(2, 12)),
+                    "id": msg.functionCall.id,
                     "name": msg.functionName,
                     "input": msg.functionCall.args || {}
                 });
