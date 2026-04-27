@@ -1052,7 +1052,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 id: messageListView
                 z: 0
                 anchors.fill: parent
-                spacing: 14
+                spacing: 4
                 popin: false
                 topMargin: statusBg.implicitHeight + statusBg.anchors.topMargin * 2
 

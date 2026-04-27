@@ -14,7 +14,7 @@ Rectangle {
     property var messageInputField
 
     property real messagePadding: 7
-    property real contentSpacing: 3
+    property real contentSpacing: 4
 
     property bool enableMouseSelection: false
     property bool renderMarkdown: true
@@ -291,7 +291,7 @@ Rectangle {
 
         Loader {
             Layout.fillWidth: true
-            active: root.messageData?.localFilePath && root.messageData?.localFilePath.length > 0
+            active: (root.messageData?.localFilePath ?? "").length > 0
             sourceComponent: AttachedFileIndicator {
                 filePath: root.messageData?.localFilePath
                 canRemove: false
@@ -314,7 +314,7 @@ Rectangle {
                 FadeLoader {
                     id: loadingIndicatorLoader
                     anchors.centerIn: parent
-                    shown: (root.messageBlocks.length < 1) && (!root.messageData.done)
+                    shown: (root.messageBlocks.length < 1) && (!root.messageData?.done ?? false)
                     sourceComponent: MaterialLoadingIndicator {
                         loading: true
                     }
