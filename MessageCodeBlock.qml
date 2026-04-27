@@ -21,6 +21,9 @@ ColumnLayout {
     property bool isCommandRequest: segmentLang === "command"
     property var displayLang: (isCommandRequest ? "bash" : segmentLang)
     property bool commandExpanded: true // Keep expanded to ensure visibility while running or when opened
+    onCommandDoneChanged: {
+        if (commandDone) commandExpanded = false;
+    }
 
     // Detect command completion status from content
     readonly property bool commandDone: root.messageData?.done ?? false

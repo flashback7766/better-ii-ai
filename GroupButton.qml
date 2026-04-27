@@ -35,8 +35,16 @@ Button {
     // Layout.fillHeight: (clickIndex - 1 <= indexInParent && indexInParent <= clickIndex + 1)
     Layout.fillWidth: false
     Layout.fillHeight: false
-    implicitWidth: (root.down && bounce) ? clickedWidth : baseWidth
-    implicitHeight: (root.down && bounce) ? clickedHeight : baseHeight
+    Binding {
+        target: root
+        property: "implicitWidth"
+        value: (root.down && bounce) ? clickedWidth : baseWidth
+    }
+    Binding {
+        target: root
+        property: "implicitHeight"
+        value: (root.down && bounce) ? clickedHeight : baseHeight
+    }
 
     property color colBackground: ColorUtils.transparentize(colBackgroundHover, 1) || "transparent"
     property color colBackgroundHover: Appearance?.colors.colLayer1Hover ?? "#E5DFED"

@@ -1806,6 +1806,7 @@ Singleton {
             if (!saveContent || saveContent.length < 2) return;
             
             const saveData = JSON.parse(saveContent)
+            if (!Array.isArray(saveData)) return;
             root.clearMessages()
             
             // Load context summary if exists
@@ -1825,6 +1826,7 @@ Singleton {
             // and delegates need messageByID[id] to be live by then.
             for (let i = 0; i < saveData.length; i++) {
                 const message = saveData[i];
+                if (!message) continue;
                 root.messageByID[saveIds[i]] = root.aiMessageComponent.createObject(root, {
                     "role": message.role,
                     "rawContent": message.rawContent,
@@ -1856,9 +1858,7 @@ Singleton {
     }
 
     function savePersistentState(key, value) {
-        if (!Persistent.states) return;
-        let ai = Persistent.states.ai || {};
-        ai[key] = value;
-        Persistent.states = Object.assign({}, Persistent.states, { ai: ai });
+        if (!Persistent.states || !Persistent.states.ai) return;
+        Persistent.states.ai[key] = value;
     }
 }
