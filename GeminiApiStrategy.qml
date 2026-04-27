@@ -180,7 +180,7 @@ ApiStrategy {
             if (dataJson.error) {
                 const errorMsg = `**Error ${dataJson.error.code}**: ${dataJson.error.message}`;
                 message.rawContent += errorMsg;
-                return { finished: true };
+                return { finished: true, errorCode: dataJson.error.code };
             }
 
             // No candidates?

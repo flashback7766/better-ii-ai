@@ -1153,6 +1153,9 @@ Singleton {
         id: requester
         property list<string> baseCommand: ["bash", "-c"]
         property AiMessageData message
+        property int retryCount: 0
+        readonly property int maxRetries: 3
+        property bool retryPending: false
         property ApiStrategy currentStrategy
 
         function markDone() {
@@ -1181,7 +1184,9 @@ Singleton {
             root.responseFinished()
         }
 
-        function makeRequest() {
+        function makeRequest(retry = false) {
+            if (!retry) requester.retryCount = 0;
+            requester.retryPending = false;
             // A fresh request clears any prior abort state
             root.aborted = false;
             // Start generation timer
@@ -1233,16 +1238,22 @@ Singleton {
             }
             
             /* Create local message object */
-            requester.message = root.aiMessageComponent.createObject(root, {
-                "role": "assistant",
-                "model": currentModelId,
-                "content": "",
-                "rawContent": "",
-                "done": false,
-            });
-            const id = idForMessage(requester.message);
-            root.messageIDs = [...root.messageIDs, id];
-            root.messageByID[id] = requester.message;
+            if (!retry) {
+                requester.message = root.aiMessageComponent.createObject(root, {
+                    "role": "assistant",
+                    "model": currentModelId,
+                    "content": "",
+                    "rawContent": "",
+                    "done": false,
+                });
+                const id = idForMessage(requester.message);
+                root.messageIDs = [...root.messageIDs, id];
+                root.messageByID[id] = requester.message;
+            } else {
+                requester.message.rawContent = "";
+                requester.message.content = "";
+                requester.message.done = false;
+            }
 
             /* Build header string for curl */ 
             let headerString = Object.entries(requestHeaders)
@@ -1293,6 +1304,15 @@ Singleton {
                 try {
                     const result = requester.currentStrategy.parseResponseLine(data, requester.message);
 
+                    if (result.errorCode === 503 && requester.retryCount < requester.maxRetries) {
+                        requester.retryCount++;
+                        requester.retryPending = true;
+                        requester.message.content = Translation.tr("*[High demand. Retrying... (%1/%2)]*").arg(requester.retryCount).arg(requester.maxRetries);
+                        retryTimer.interval = 1000 * Math.pow(2, requester.retryCount - 1);
+                        retryTimer.start();
+                        return;
+                    }
+
                     if (result.functionCall) {
                         // Flush content immediately before function call
                         streamFlushTimer.flushNow();
@@ -1326,6 +1346,8 @@ Singleton {
             streamFlushTimer.flushNow();
             const result = requester.currentStrategy.onRequestFinished(requester.message);
             
+            if (requester.retryPending) return;
+
             if (result.finished) {
                 requester.markDone();
             } else if (!requester.message.done) {
@@ -1351,6 +1373,12 @@ Singleton {
                 }
             }
         }
+    }
+
+    Timer {
+        id: retryTimer
+        interval: 1000
+        onTriggered: requester.makeRequest(true)
     }
 
     // Debounced content flush: batches rapid token updates into intervals
