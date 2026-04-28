@@ -713,7 +713,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
         ]
 
-        width: 400
+        width: 300
         implicitHeight: functionsPopupColumn.implicitHeight + 16
         clip: true
         radius: Appearance.rounding.large ?? 16
@@ -828,7 +828,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     StyledText {
                         font.pixelSize: Appearance.font.pixelSize.smaller + 2
                         color: Appearance.colors.colSubtext
-                        text: Translation.tr("Save credits by reusing context (Claude/Gemini)")
+                        text: Translation.tr("Save credits by reusing context")
                     }
                 }
 
@@ -857,19 +857,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
             }
 
-            // --- Debug Section ---
-            Rectangle {
-                Layout.fillWidth: true; implicitHeight: 1
-                color: Appearance.colors.colOutlineVariant; opacity: 0.3
-            }
-            RowLayout {
-                Layout.fillWidth: true; Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.bottomMargin: 4
-                StyledText {
-                    text: "DEBUG: Model=[" + Ai.currentModelId + "]"
-                    font.pixelSize: 10
-                    color: "gray"
-                }
-            }
+
         }
     }
 
