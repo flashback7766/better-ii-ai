@@ -241,6 +241,17 @@ ColumnLayout {
                         implicitHeight: codeTextArea.implicitHeight + 1
                         contentWidth: codeTextArea.width - 1
                         clip: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.NoButton
+                            onWheel: (event) => {
+                                if (event.angleDelta.y !== 0) {
+                                    event.accepted = false;
+                                }
+                            }
+                        }
+
                         ScrollBar.vertical.policy: ScrollBar.AlwaysOff
                         ScrollBar.horizontal: ScrollBar {
                             anchors.bottom: parent.bottom
