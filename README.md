@@ -16,7 +16,7 @@ faster, more capable assistant that fits the existing shell without changing the
   - `run_shell_command` — executes commands locally. A built-in pattern matcher flags
     obviously destructive commands (`rm -rf /`, `dd of=/dev/…`, `curl … | sh`, fork bombs,
     `git push --force`, etc.) and gates them behind explicit user approval. Safe commands
-    run automatically when `functionsAutoConfirm` is on.
+    run automatically.
   - `get_shell_config` / `set_shell_config` — reads and edits the desktop shell config
     so the model can change settings on request.
   - Web search — Google Search grounding for Gemini; for OpenAI/Anthropic the model can
@@ -66,6 +66,10 @@ bash install.sh
 ```
 
 It backs up the existing files before copying the new ones in place.
+And after, set this system prompt to get better expirience
+```
+/prompt /home/"youruser"/.config/quickshell/ii/defaults/ai/prompts/ii-Default.md 
+```
 
 ## Keyboard shortcuts
 
