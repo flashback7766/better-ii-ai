@@ -49,10 +49,10 @@ faster, more capable assistant that fits the existing shell without changing the
 
 | Provider     | Models                                              | Notes                       |
 |--------------|-----------------------------------------------------|-----------------------------|
-| Google       | Gemini 3.1 Flash-Lite, Gemini 3 Flash, Gemini 3.1 Pro | Recommended; best tool use  |
-| Anthropic    | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.7  | Prompt caching enabled      |
-| OpenAI       | GPT-5.4 Nano, GPT-5.4 Mini, GPT-5.4                   | Function calling supported  |
-| Local (any)  | Anything reachable over an OpenAI-compatible endpoint | Added with `/addlocal`      |
+| Google       | Gemini 3.1 Flash-Lite, Gemini 3 Flash, Gemini 3.1 Pro | Best supported provider, best API compatibility, best support for functions and tools |
+| Anthropic    | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.7  | Prompt caching enabled (may not work, not tested cuz I'm broke)      |
+| OpenAI       | GPT-5.4 Nano, GPT-5.4 Mini, GPT-5.4                   | Function calling supported (may not work, not tested cuz I'm broke)  |
+| Local (any)  | Anything reachable over an OpenAI-compatible endpoint | Added with `/addlocal` (still testing what else it can do and improving compatibility)     |
 
 The list of installed Ollama models is auto-discovered at startup.
 
